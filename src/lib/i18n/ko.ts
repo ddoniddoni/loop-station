@@ -1,0 +1,16 @@
+export const ko = {
+  appName: "Loop Station",
+  description: "브라우저에서 녹음하고, 반복하고, 소리를 쌓는 루프스테이션.",
+  skipToContent: "본문으로 바로가기",
+  status: "개발 준비 중",
+  title: "첫 루프를 준비하고 있어요.",
+  introduction: "내 목소리와 악기로 만드는 작은 스튜디오.",
+  availability: "지금은 프로젝트의 기본 구성을 준비한 단계입니다. 녹음, 재생, 저장 기능은 아직 사용할 수 없어요.",
+  newProject: "새 프로젝트",
+  demo: "데모로 체험",
+  nextStepTitle: "다음으로 준비할 기능",
+  nextStep: "오디오 시작과 마이크 설정",
+  nextStepDescription: "직접 시작 버튼을 누른 뒤 소리를 켜고, 마이크 사용 여부를 선택할 수 있도록 만들 예정이에요.",
+  privacy: "현재 마이크를 사용하거나 소리를 녹음하지 않습니다.",
+  localFirst: "이 기기에서 시작하는 음악 작업",
+} as const;
