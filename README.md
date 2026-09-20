@@ -1,54 +1,91 @@
-# Loop Station
+<p align="center">
+  <img src="docs/assets/readme-hero.svg" alt="Loop Station — Make a sound. Make it loop. 브라우저 루프스테이션 프로젝트" width="100%" />
+</p>
 
-브라우저에서 녹음하고 반복하며 소리를 쌓는 웹 루프스테이션을 만들기 위한 초기 프로젝트입니다.
+<h3 align="center">작은 소리 하나에서 시작하는 음악.</h3>
 
-**현재 범위:** Next.js 기반, 한국어 준비 화면, 박자/프레임 변환 함수, 자동 검사 환경. 실제 녹음·루핑·저장·클라우드는 아직 구현하지 않았습니다. Phase 0 전체 완료가 아닙니다.
+<p align="center">
+  목소리 하나, 짧은 비트 하나.<br />
+  반복 위에 소리를 쌓아가는 브라우저 루프스테이션을 만들고 있습니다.
+</p>
 
-## 실행
+<p align="center">
+  <code>Next.js 16</code> &nbsp;·&nbsp;
+  <code>React 19</code> &nbsp;·&nbsp;
+  <code>TypeScript</code> &nbsp;·&nbsp;
+  <code>Tailwind CSS 4</code>
+</p>
 
-Node.js 24 LTS를 권장합니다(`.nvmrc`). Node.js 26 안정 버전도 허용합니다. 패키지 관리자는 npm 11입니다.
+<p align="center">
+  <a href="#quick-start">로컬에서 열어보기</a> &nbsp;↗&nbsp;
+  <a href="docs/PROGRESS.md">개발 기록</a> &nbsp;↗&nbsp;
+  <a href="docs/LOOP_STATION_SPEC.md">설계 노트</a>
+</p>
+
+<br />
+
+## On the loop
+
+흥얼거린 멜로디에 비트를 얹고, 그 위에 다음 소절을 더하는 경험.<br />
+브라우저 안에서 녹음부터 연주, 저장까지 이어지는 작업 공간이 목표입니다.
+
+| | 개발 흐름 |
+| :--- | :--- |
+| **지금** | 한국어 준비 화면, 박자·프레임 변환, 자동 검사 환경 |
+| **다음** | 오디오 시작, AudioWorklet 연결, 마이크 권한과 환경 진단 |
+| **그다음** | 첫 녹음과 루핑 → 여러 트랙과 오버더빙 → 로컬 저장과 WAV 내보내기 |
+
+> **🚧 Under construction** — 현재 Phase 0을 진행 중입니다.<br />
+> 실제 녹음·루핑·저장·클라우드는 아직 구현 전입니다. 자세한 상태는 [개발 기록](docs/PROGRESS.md)에 남깁니다.
+
+## Quick start
+
+**Node.js 24 LTS · npm 11**을 기준으로 시작합니다. Node.js 26도 허용합니다.
+
+프로젝트 폴더에서:
 
 ```bash
-cd /Users/ddoni/dev/loop-station
-# nvm을 사용하는 경우: nvm use
 npm ci
 npm run dev
 ```
 
-http://localhost:3000 에서 확인합니다. 환경변수나 외부 계정은 필요하지 않습니다. 의존성이 설치되어 있으면 `npm run dev`만 실행하면 됩니다.
+[localhost:3000](http://localhost:3000)에서 준비 화면을 확인할 수 있습니다.<br />
+환경변수나 외부 계정은 필요하지 않습니다. nvm을 사용한다면 설치 전에 `nvm use`를 실행하세요.
 
-## 검사
+<details>
+<summary><strong>개발할 때 참고하기 — 검사 명령과 폴더 구조</strong></summary>
+
+<br />
 
 ```bash
 npm run lint
 npm run typecheck
 npm run test
 npm run build
+
+# 브라우저 검사: 빌드 후 실행
 npx playwright install chromium
 npm run test:e2e
 ```
 
-E2E는 빌드된 앱을 전용 포트 3108에서 실행하고 종료합니다. 기존 서버를 재사용하지 않습니다. `test:audio`는 현재 **시간 변환 수치 테스트**이며, 실제 DSP·마이크·Worklet 검증을 뜻하지 않습니다. 단위 테스트의 관찰 모드는 `npm run test:watch`입니다.
-
-## 구조
+E2E는 빌드된 앱을 전용 포트 `3108`에서 실행합니다. `npm run test:watch`로 단위 테스트를 관찰 모드에서 실행할 수 있습니다. 현재 `npm run test:audio`는 시간 변환 수치 테스트이며, 실제 마이크·DSP·Worklet 검증은 아직 포함하지 않습니다.
 
 ```text
-src/app/                 App Router와 초기 화면
-src/lib/i18n/            한국어 UI 문구
-src/audio/transport/     React/DOM에 의존하지 않는 시간 변환
-tests/audio/             시간 변환 수치 테스트
-tests/e2e/               production 브라우저 테스트
-docs/                    상세 명세와 실제 진행 기록
+src/app/                화면과 스타일
+src/lib/i18n/           한국어 UI 문구
+src/audio/transport/    박자와 오디오 프레임 변환
+tests/                  단위 테스트와 브라우저 테스트
+docs/                   설계 노트와 개발 기록
 ```
 
-엔진, Worklet, Worker, IndexedDB 저장소는 해당 기능을 구현할 때 상세 명세의 책임 분리에 맞춰 추가합니다. 현재 `build`와 `dev`는 Next.js만 실행합니다. `build:audio`와 Worklet watch 파이프라인은 실제 Worklet 엔트리를 추가하는 다음 작업에서 구현합니다. 실행 내용이 없는 성공 스크립트는 만들지 않습니다.
+현재 `dev`와 `build`는 Next.js를 실행합니다. Worklet 빌드·watch 파이프라인은 실제 오디오 엔진 구현과 함께 추가할 예정입니다. 작업 규칙은 [AGENTS.md](AGENTS.md)를 참고하세요.
 
-## 문서
+</details>
 
-- [프로젝트 규칙](AGENTS.md)
-- [상세 설계](docs/LOOP_STATION_SPEC.md)
-- [진행 상태와 검증 결과](docs/PROGRESS.md)
+<br />
 
-다음 작업은 Phase 0의 사용자 동작 기반 AudioContext, Worklet 로딩, 마이크 선택/거부 처리, 환경 진단입니다. 녹음·연주 구현 전까지 홈의 기능 버튼은 이유와 함께 비활성화합니다.
+---
 
-Git 저장소 초기화, 브랜치 생성, commit, push, 배포는 별도의 명시적 요청이 있을 때만 진행합니다.
+<p align="center">
+  <sub>한 소절씩, 한 겹씩. &nbsp; Record. Repeat. Build.</sub>
+</p>
