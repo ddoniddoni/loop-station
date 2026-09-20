@@ -46,18 +46,7 @@ npm run build
 
 브라우저와 오디오 동작을 바꿨으면 관련 `npm run test:e2e`도 실행한다. 하드웨어 지연과 실청취는 자동 테스트와 별개로 기록한다. 미실행, 실패, 환경 제약을 통과로 표시하지 않는다. 신규 `any`, 검증 무시 주석, 테스트 삭제로 오류를 숨기지 않는다.
 
-기존 Git 규칙과 사용자 변경을 보존한다. 새 저장소에서 브랜치 전략이 필요하면 `develop`과 작업별 `feature/`, `fix/`, `docs/` 브랜치를 사용한다. 사용자의 명시적 요청 없이 commit, push, 배포, 유료 리소스 생성, 파괴적 Git 명령을 실행하지 않는다.
-
 작업이 끝나면 `docs/PROGRESS.md`에 요구사항 ID, 변경 파일, 실제 실행한 명령과 결과, 알려진 제한, 다음 작업을 기록한다. 사용자에게도 구현 내용과 미완료 내용을 구분해 보고한다. 요구사항의 인수 기준을 충족한 경우에만 완료로 변경한다.
-
-## 사용자 Git 작업 규칙
-
-- Git 초기화, 브랜치 생성, commit, push, tag, release, merge, rebase, PR 생성은 사용자가 해당 작업을 명시적으로 요청했을 때만 실행한다. 구현 요청은 Git 작업 권한이 아니다.
-- 저장소 초기화 이후 일상 작업은 최신 develop에서 짧은 feature/*, fix/*, docs/*, refactor/*, test/*, chore/* 브랜치로 진행한다. 브랜치 생성도 위의 명시적 요청 규칙을 따른다.
-- 일반 PR 대상은 develop, 안정 릴리스는 develop → main 전용 PR이다. develop/main 직접 commit은 해당 작업의 명시적 요청이 있어야 한다.
-- Conventional Commits 형식 type(scope): subject를 사용한다. 한 브랜치와 PR은 하나의 변경만 담는다.
-- 사용자 변경을 보존하고 git add .를 사용하지 않는다. force-push, 공유 이력 재작성, 파괴적 Git 명령은 명시적 허가 없이는 실행하지 않는다.
-- push/PR 전에 관련 lint, typecheck, test 및 변경에 필요한 추가 검증을 실제 실행한다.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

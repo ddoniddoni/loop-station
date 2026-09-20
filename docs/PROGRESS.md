@@ -158,6 +158,14 @@
 - 시각 검수: Playwright CLI로 1280×900 데스크톱 및 393×851 모바일 화면을 캡처. Ego는 0×0 viewport와 captureScreenshot 시간 초과가 발생해 캡처 경로를 전환함.
 - 저장 포맷/migration: 생성 또는 변경 없음.
 
+### 2026-09-21 — 프로젝트 Git 규칙 중복 제거
+
+- 제품 요구사항 ID: 해당 없음(작업 규칙 정리).
+- 변경 파일: `AGENTS.md`, `docs/PROGRESS.md`.
+- 프로젝트 `AGENTS.md`의 Git Flow 문단과 중복 Git 작업 규칙을 삭제함. 앞으로 Git 작업은 사용자 Codex 설정의 `/Users/ddoni/.codex/AGENTS.md`를 기준으로 함.
+- 실행 결과: `git diff --check`, `npm run lint`, `npm run typecheck`, `NEXT_TELEMETRY_DISABLED=1 npm run build` 모두 성공. 사용자 요청에 따라 단위·E2E 테스트는 실행하지 않음.
+- Git 작업: 이 정리는 별도 chore 브랜치로 분리하고 기존 기능 변경은 보존함.
+
 ## 알려진 제한과 차단 항목
 
 프로젝트 기반만 준비되었다. AudioContext, AudioWorklet, 환경 진단, 마이크 권한 흐름, PCM 녹음, 루핑, 저장, FX, MIDI, 클라우드 기능은 미구현이다. 화면은 이 상태를 명시하며 새 프로젝트/데모 버튼은 이유와 함께 비활성화한다. 외부 폰트나 오디오 에셋 요청 없이 기본 화면을 렌더한다.
