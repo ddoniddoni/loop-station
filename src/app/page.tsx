@@ -1,39 +1,49 @@
+import { Badge, Button, Card, Flex, Heading, Separator, Text } from "@radix-ui/themes";
+import { AudioSetup } from "@/components/audio/audio-setup";
 import { ko } from "@/lib/i18n/ko";
 
 export default function Home() {
   return (
     <div className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 sm:px-12">
       <a className="skip-link" href="#main">{ko.skipToContent}</a>
-      <header className="flex flex-wrap items-center justify-between gap-4 py-8">
-        <span className="brand text-xl font-semibold tracking-tight">{ko.appName}</span>
-        <span className="rounded-full border border-line px-3 py-1.5 text-xs text-muted">{ko.status}</span>
-      </header>
+      <Flex asChild align="center" justify="between" gap="4" wrap="wrap">
+        <header className="py-8">
+          <Text as="span" size="5" weight="bold" className="brand">{ko.appName}</Text>
+          <Badge color="amber" variant="soft" radius="full" size="2">{ko.status}</Badge>
+        </header>
+      </Flex>
 
       <main id="main" className="flex flex-1 flex-col justify-center py-10 sm:py-20">
-        <section aria-labelledby="welcome-title" className="rounded-3xl border border-line bg-panel p-7 sm:p-14">
-          <div className="loop-mark mb-10" aria-hidden="true"><span /><span /></div>
-          <p className="mb-4 text-sm text-accent">{ko.introduction}</p>
-          <h1 id="welcome-title" className="text-3xl leading-snug break-keep text-balance font-semibold tracking-tight sm:text-5xl">{ko.title}</h1>
-          <p id="availability" className="mt-6 max-w-lg text-base leading-7 text-muted">{ko.availability}</p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <button type="button" disabled aria-describedby="availability" className="min-h-12 rounded-xl border border-line bg-surface px-5 text-sm text-muted disabled:cursor-not-allowed">{ko.newProject}</button>
-            <button type="button" disabled aria-describedby="availability" className="min-h-12 rounded-xl border border-line px-5 text-sm text-muted disabled:cursor-not-allowed">{ko.demo}</button>
-          </div>
-        </section>
+        <Card size={{ initial: "3", sm: "5" }} asChild>
+          <section aria-labelledby="welcome-title">
+            <div className="loop-mark mb-10" aria-hidden="true"><span /><span /></div>
+            <Text as="p" size="2" color="amber" mb="4">{ko.introduction}</Text>
+            <Heading as="h1" id="welcome-title" size={{ initial: "7", sm: "9" }} className="break-keep text-balance">{ko.title}</Heading>
+            <Text as="p" id="availability" size="3" color="gray" mt="5" className="max-w-lg leading-7">{ko.availability}</Text>
+            <Flex gap="3" wrap="wrap" mt="9">
+              <Button type="button" size="3" variant="soft" disabled aria-describedby="availability" className="min-h-12">{ko.newProject}</Button>
+              <Button type="button" size="3" variant="outline" color="gray" disabled aria-describedby="availability" className="min-h-12">{ko.demo}</Button>
+            </Flex>
+          </section>
+        </Card>
 
         <section aria-labelledby="next-step-title" className="mt-8 grid gap-3 px-2 sm:grid-cols-[1fr_2fr] sm:gap-10">
-          <h2 id="next-step-title" className="text-sm text-muted">{ko.nextStepTitle}</h2>
+          <Heading as="h2" id="next-step-title" size="2" color="gray" weight="medium">{ko.nextStepTitle}</Heading>
           <div>
-            <h3 className="text-base font-medium">{ko.nextStep}</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">{ko.nextStepDescription}</p>
+            <Heading as="h3" size="3" weight="medium">{ko.nextStep}</Heading>
+            <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.nextStepDescription}</Text>
+            <AudioSetup />
           </div>
         </section>
       </main>
 
-      <footer className="flex flex-wrap justify-between gap-3 border-t border-line py-6 text-xs leading-5 text-muted">
-        <span>{ko.localFirst}</span>
-        <span>{ko.privacy}</span>
-      </footer>
+      <Separator size="4" />
+      <Flex asChild justify="between" gap="3" wrap="wrap">
+        <footer className="py-6">
+          <Text as="span" size="1" color="gray">{ko.localFirst}</Text>
+          <Text as="span" size="1" color="gray">{ko.privacy}</Text>
+        </footer>
+      </Flex>
     </div>
   );
 }

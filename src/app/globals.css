@@ -1,22 +1,63 @@
 @import "tailwindcss";
 
-@theme inline {
-  --color-surface: #111e24;
-  --color-panel: #1b2c33;
-  --color-foreground: #eff3f1;
-  --color-muted: #b2c3c8;
-  --color-accent: #efbe79;
-  --color-line: #385058;
-  --font-sans: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+:root {
+  color-scheme: dark;
 }
 
-:root { color-scheme: dark; }
-body { margin: 0; background: var(--color-surface); color: var(--color-foreground); font-family: var(--font-sans); }
-.brand { font-family: "Avenir Next", "Trebuchet MS", sans-serif; }
-button, a { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 5px; }
-.skip-link { position: absolute; top: 1rem; left: 1rem; z-index: 10; padding: 0.75rem 1rem; border-radius: 0.5rem; background: var(--color-accent); color: var(--color-surface); transform: translateY(-200%); }
-.skip-link:focus { transform: translateY(0); }
-.loop-mark { display: flex; height: 3rem; align-items: center; }
-.loop-mark span { width: 3rem; height: 3rem; border: 2px solid var(--color-accent); border-radius: 50%; }
-.loop-mark span + span { margin-left: -1rem; }
+body {
+  margin: 0;
+}
+
+.radix-themes {
+  --default-font-family: "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --heading-font-family: "Avenir Next", "Apple SD Gothic Neo", sans-serif;
+  min-height: 100svh;
+}
+
+.brand {
+  font-family: "Avenir Next", "Apple SD Gothic Neo", sans-serif;
+  letter-spacing: -0.02em;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-11);
+  outline-offset: 5px;
+}
+
+.skip-link {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 10;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-3);
+  background: var(--accent-9);
+  color: var(--accent-contrast);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.loop-mark {
+  display: flex;
+  height: 3rem;
+  align-items: center;
+}
+
+.loop-mark span {
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid var(--accent-9);
+  border-radius: 50%;
+}
+
+.loop-mark span + span {
+  margin-left: -1rem;
+}

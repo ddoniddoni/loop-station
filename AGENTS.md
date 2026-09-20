@@ -13,6 +13,7 @@
 
 - Next.js App Router, React, TypeScript strict를 사용한다.
 - 패키지 관리는 npm만 사용하고 `package-lock.json`을 유지한다. pnpm, yarn, bun으로 바꾸지 않는다.
+- 공통 UI는 Radix Themes를 디자인 시스템으로 사용한다. 새 화면은 루트 테마와 Radix 컴포넌트·토큰을 재사용하고, Tailwind CSS는 배치 유틸리티로 사용한다. 다른 UI 컴포넌트 시스템을 중복 도입하지 않는다.
 - 설치 시점의 공식 문서와 npm 배포 정보를 확인해 호환되는 안정 버전을 선택하고 실제 버전을 진행 문서에 기록한다. 기존 프로젝트라면 무관한 메이저 업그레이드를 하지 않는다.
 - 녹음과 연주 엔진은 브라우저의 Web Audio API와 AudioWorklet을 사용한다. React는 화면과 명령 전달을 담당하고 실제 오디오 시계가 되지 않는다.
 - 기본 저장은 IndexedDB 기반 로컬 우선 방식이다. 서버 DB가 필요한 클라우드 기능은 Supabase Auth, Postgres, Storage를 사용한다. Supabase 환경변수 없이도 로컬 모드가 실행되어야 한다.
