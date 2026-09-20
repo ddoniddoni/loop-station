@@ -1,5 +1,6 @@
 import { Badge, Button, Card, Flex, Heading, Separator, Text } from "@radix-ui/themes";
 import { AudioSetup } from "@/components/audio/audio-setup";
+import { MicrophoneSetup } from "@/components/audio/microphone-setup";
 import { ko } from "@/lib/i18n/ko";
 
 export default function Home() {
@@ -33,6 +34,7 @@ export default function Home() {
             <Heading as="h3" size="3" weight="medium">{ko.nextStep}</Heading>
             <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.nextStepDescription}</Text>
             <AudioSetup />
+            <MicrophoneSetup />
           </div>
         </section>
       </main>
