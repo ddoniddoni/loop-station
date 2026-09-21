@@ -3,6 +3,8 @@
 import { Button, Flex, Text } from "@radix-ui/themes";
 import { useEffect, useRef, useState } from "react";
 import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine";
+import type { TransportSnapshot } from "@/audio/transport/audio-frame-clock";
+import { TransportControls } from "@/components/audio/transport-controls";
 import { ko } from "@/lib/i18n/ko";
 
 type AudioPhase = "idle" | "starting" | "ready" | "playing" | "suspended" | "stopping" | "error";
@@ -62,6 +64,7 @@ export function AudioSetup() {
   const engineRef = useRef<TestToneEngine | null>(null);
   const [phase, setPhase] = useState<AudioPhase>("idle");
   const [sampleRate, setSampleRate] = useState<number | null>(null);
+  const [transport, setTransport] = useState<TransportSnapshot | null>(null);
   const [issue, setIssue] = useState<string | null>(null);
 
   useEffect(() => () => {
@@ -74,6 +77,7 @@ export function AudioSetup() {
     if (engineRef.current) return;
     setIssue(null);
     setPhase("starting");
+    setTransport(null);
 
     let engine: TestToneEngine;
     try {
@@ -86,6 +90,7 @@ export function AudioSetup() {
             engineRef.current = null;
             release(engine);
             setSampleRate(null);
+            setTransport(null);
             setPhase("error");
             setIssue(ko.audioErrors.closed);
           } else {
@@ -97,11 +102,15 @@ export function AudioSetup() {
             setPhase(playing ? "playing" : "ready");
           }
         },
+        onTransportStateChange: (snapshot) => {
+          if (engineRef.current === engine) setTransport(snapshot);
+        },
         onProcessorError: () => {
           if (engineRef.current !== engine) return;
           engineRef.current = null;
           release(engine);
           setSampleRate(null);
+          setTransport(null);
           setPhase("error");
           setIssue(ko.audioErrors.processorFailed);
         },
@@ -123,6 +132,7 @@ export function AudioSetup() {
       await engine.dispose().catch(() => undefined);
       engineRef.current = null;
       setSampleRate(null);
+      setTransport(null);
       setPhase("error");
       setIssue(errorMessage(error, ko.audioErrors.startFailed));
     }
@@ -133,6 +143,7 @@ export function AudioSetup() {
     if (!engine) return;
     engineRef.current = null;
     setPhase("stopping");
+    setTransport(null);
     try {
       await engine.dispose();
       setPhase("idle");
@@ -176,6 +187,14 @@ export function AudioSetup() {
         {status}
         {sampleRate !== null && phase !== "error" && <> · {ko.sampleRate}: {sampleRate} Hz</>}
       </Text>
+      <TransportControls
+        enabled={phase === "ready" || phase === "playing"}
+        snapshot={transport}
+        onStart={() => engineRef.current?.startTransport()}
+        onStop={() => engineRef.current?.stopTransport()}
+        onReset={() => engineRef.current?.resetTransport()}
+        onConfigure={(config) => engineRef.current?.configureTransport(config)}
+      />
     </div>
   );
 }

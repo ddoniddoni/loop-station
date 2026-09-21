@@ -1,4 +1,7 @@
+import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
+
 declare const sampleRate: number;
+declare const currentFrame: number;
 declare function registerProcessor(
   name: string,
   processor: new () => AudioWorkletProcessor,
@@ -8,9 +11,12 @@ declare class AudioWorkletProcessor {
 }
 
 class TestToneProcessor extends AudioWorkletProcessor {
+  private readonly clock = new AudioFrameClock(sampleRate);
   private phase = 0;
   private level = 0;
   private enabled = false;
+  private transportDirty = true;
+  private framesSinceSnapshot = 0;
   private readonly phaseStep = (2 * Math.PI * 440) / sampleRate;
   private readonly envelopeStep = 1 / (sampleRate * 0.01);
 
@@ -26,6 +32,18 @@ class TestToneProcessor extends AudioWorkletProcessor {
       } else if (data.type === "stop") {
         this.enabled = false;
         this.port.postMessage({ type: "stopped" });
+      } else if (data.type === "transport-start") {
+        this.clock.start();
+        this.transportDirty = true;
+      } else if (data.type === "transport-stop") {
+        this.clock.stop();
+        this.transportDirty = true;
+      } else if (data.type === "transport-reset") {
+        this.clock.reset();
+        this.transportDirty = true;
+      } else if (data.type === "transport-configure" && "config" in data && isTransportConfig(data.config)) {
+        this.clock.configure(data.config);
+        this.transportDirty = true;
       }
     };
   }
@@ -46,6 +64,14 @@ class TestToneProcessor extends AudioWorkletProcessor {
         const samples = channels[channel];
         if (frame < samples.length) samples[frame] = value;
       }
+    }
+
+    this.clock.advance(frameCount);
+    this.framesSinceSnapshot = this.clock.playing ? this.framesSinceSnapshot + frameCount : 0;
+    if (this.transportDirty || this.framesSinceSnapshot >= sampleRate / 10) {
+      this.port.postMessage(this.clock.snapshot(currentFrame + frameCount));
+      this.transportDirty = false;
+      this.framesSinceSnapshot = 0;
     }
 
     return true;

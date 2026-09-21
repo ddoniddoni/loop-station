@@ -1,6 +1,9 @@
+import { isTransportSnapshot, type TransportConfig, type TransportSnapshot } from "../transport/audio-frame-clock";
+
 type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
   onToneStateChange: (playing: boolean) => void;
+  onTransportStateChange: (snapshot: TransportSnapshot) => void;
   onProcessorError: () => void;
 };
 
@@ -78,6 +81,10 @@ export class TestToneEngine {
     node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.disposed) return;
       const data = event.data;
+      if (isTransportSnapshot(data)) {
+        this.callbacks.onTransportStateChange(data);
+        return;
+      }
       if (typeof data !== "object" || data === null || !("type" in data)) return;
       if (data.type === "playing") this.callbacks.onToneStateChange(true);
       if (data.type === "stopped") this.callbacks.onToneStateChange(false);
@@ -112,6 +119,26 @@ export class TestToneEngine {
   stopTone(): void {
     if (this.disposed || !this.node) return;
     this.node.port.postMessage({ type: "stop" });
+  }
+
+  startTransport(): void {
+    if (this.disposed || this.context.state !== "running") return;
+    this.node?.port.postMessage({ type: "transport-start" });
+  }
+
+  stopTransport(): void {
+    if (this.disposed || this.context.state !== "running") return;
+    this.node?.port.postMessage({ type: "transport-stop" });
+  }
+
+  resetTransport(): void {
+    if (this.disposed || this.context.state !== "running") return;
+    this.node?.port.postMessage({ type: "transport-reset" });
+  }
+
+  configureTransport(config: TransportConfig): void {
+    if (this.disposed || this.context.state !== "running") return;
+    this.node?.port.postMessage({ type: "transport-configure", config });
   }
 
   async dispose(): Promise<void> {
