@@ -3,10 +3,11 @@
 ## 현재 상태
 
 - 기준일: 2026-09-21
-- 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0은 부분 구현.**
+- 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0은 부분 구현·미검증, Phase 1은 공통 시계부터 부분 구현.**
 - 프로젝트 위치: `/Users/ddoni/dev/loop-station`. Next.js App Router 기반 한국어 준비 화면과 순수 시간 변환 함수를 생성함.
-- 검증: npm install, lint, typecheck, 단위 테스트 21개, production build, Chromium 데스크톱/모바일 E2E 2개 통과. 실제 오디오 처리는 미구현·미검증.
-- 다음 작업: 사용자가 다음 구현을 요청하면 Phase 0의 AudioContext, Worklet 빌드/로딩, 마이크 권한 흐름, 환경 진단을 구현.
+- UI 기반: Radix Themes 3.3.0에 Google Stitch의 `Web Loop Station DAW` 디자인 언어를 적용한 반응형 스튜디오 셸. 사용자 클릭으로 AudioContext/개발용 테스트 신호, 별도의 마이크 권한·장치 설정, 읽기 전용 환경 진단, 오디오 프레임 기반 공통 시계와 메트로놈 UI를 제공함. 실제 녹음 연주 화면은 미구현.
+- 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 오디오·마이크·환경 진단·공통 시계·메트로놈 변경은 사용자 요청에 따라 테스트를 중단했고, 실제 브라우저 권한·장치·실청취도 미검증.
+- 다음 작업: 사용자 요청 후 Worklet, 마이크 권한·장치, 환경 진단, 공통 시계와 메트로놈을 실제 브라우저에서 검증. 그 전에는 Phase 0과 CLK-01/02를 완료로 표시하지 않음.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
@@ -19,8 +20,8 @@
 
 | Phase | 목표 | 상태 | 증거/다음 작업 |
 |---|---|---|---|
-| 0 | 저장소와 실제 오디오 기반 | 부분 구현 | SYS-01 검증. 실제 오디오 엔진과 Worklet은 미착수 |
-| 1 | 한 트랙 녹음과 공통 시계 | 미착수 | Phase 0 후 진행 |
+| 0 | 저장소와 실제 오디오 기반 | 부분 구현 | SYS-01 검증. 사용자 시작/종료, 테스트 신호 Worklet, 마이크 권한·장치 UI와 환경 진단 구현. 실제 브라우저 검증은 남음 |
+| 1 | 한 트랙 녹음과 공통 시계 | 부분 구현 | Worklet 프레임 기반 시계와 클릭 출력 분리·강약박·음량 UI 구현. Tap Tempo, 카운트인, 퀀타이즈, 실제 PCM 녹음·반복 및 브라우저 검증은 남음 |
 | 2 | 8트랙, 오버더빙, 로컬 저장 | 미착수 | 실제 PCM과 Undo 검증 |
 | 3 | 편집, 지연 보정, 파일 입출력 | 미착수 | 기본 루핑 제품 완성 목표 |
 | 4 | FX, 장면, 내부 녹음 | 미착수 | 라우팅/공연 녹음 검증 |
@@ -37,13 +38,13 @@
 |---|---|---:|---|---|
 | SYS-01 | 프로젝트 기반 | 0 | 검증 완료 | App Router, React, TS strict, npm lockfile, lint/typecheck/test/build 및 production E2E 통과 |
 | SYS-02 | 로컬 우선 실행 | 2 | 미착수 | — |
-| SYS-03 | 안전한 오디오 시작 | 0 | 미착수 | — |
-| SYS-04 | 환경 진단 | 0 | 미착수 | — |
-| IN-01 | 입력 장치와 채널 선택 | 1 | 미착수 | — |
+| SYS-03 | 안전한 오디오 시작 | 0 | 부분 구현 | AudioContext/Worklet과 마이크 요청을 분리. 권한 거부·장치 없음·읽기 실패·제약 불일치·대기 취소·연결 끊김 안내 코드 구현. 실제 브라우저 검증은 남음 |
+| SYS-04 | 환경 진단 | 0 | 구현 완료/미검증 | AudioContext sampleRate와 마이크 `getSettings()`의 채널·처리 설정 표시. 버튼을 누르면 AudioWorklet·마이크·MIDI·IndexedDB API, 보안 연결·격리 모드, 저장소 사용량/할당량 추정과 영구 저장 허용 상태를 읽음. API 존재와 실제 동작은 구분하며 브라우저 검증은 남음 |
+| IN-01 | 입력 장치와 채널 선택 | 1 | 부분 구현 | 허용 후 입력 장치 목록과 전환 UI 구현. 채널 선택·녹음 라우팅 및 실제 장치 검증은 남음 |
 | IN-02 | 입력 게인과 모니터링 | 1 | 미착수 | — |
 | IN-03 | 녹음 지연 보정 | 3 | 미착수 | — |
-| CLK-01 | 공통 트랜스포트 | 1 | 미착수 | — |
-| CLK-02 | 메트로놈 | 1 | 미착수 | — |
+| CLK-01 | 공통 트랜스포트 | 1 | 부분 구현 | 현재 테스트 신호 Worklet에서 처리한 실제 프레임 수로 시작·정지·초기화와 40~240 BPM, 3/4·4/4·6/8·7/8 위치를 계산. UI에 마디·박 표시. Tap Tempo, 녹음·루프 연동과 브라우저 검증은 남음 |
+| CLK-02 | 메트로놈 | 1 | 부분 구현 | Worklet 오디오 프레임에서 절대 beat tick의 경계를 계산해 마디 첫 박 강박·나머지 약박을 별도 출력으로 생성. ON/OFF·0~100 음량 제공. 6/8 세부 악센트 묶음, 카운트인 전용/항상 모드, 실제 실청취·WAV 제외 검증은 남음 |
 | CLK-03 | 퀀타이즈와 고정 길이 | 1 | 미착수 | — |
 | CLK-04 | 첫 루프로 템포 설정 | 2 | 미착수 | — |
 | CLK-05 | 장시간 동기화 | 2 | 미착수 | — |
@@ -92,8 +93,8 @@
 | CLOUD-02 | 사용자 데이터 보안 | 7 | 미착수 | — |
 | CLOUD-03 | 재시도 가능한 동기화 | 7 | 미착수 | — |
 | CLOUD-04 | 읽기 전용 링크 공유 | 7 | 미착수 | — |
-| UX-01 | 통합 작업 화면 | 4 | 미착수 | — |
-| UX-02 | 반응형과 접근성 | 8 | 미착수 | — |
+| UX-01 | 통합 작업 화면 | 4 | 부분 구현 | Stitch 기반 스튜디오 셸에 현재 오디오·시계·메트로놈·마이크·진단을 배치하고 빈 트랙과 미구현 프로젝트 작업을 구분함. 실제 클립 그리드·믹서·편집기 등은 미구현 |
+| UX-02 | 반응형과 접근성 | 8 | 부분 구현 | 데스크톱/모바일 레이아웃, 44px 버튼, 제목·상태·포커스·건너뛰기 링크를 코드에 적용함. 브라우저·키보드·터치·스크린리더 검증은 사용자 요청까지 보류 |
 | UX-03 | 첫 사용 안내와 데모 | 2 | 미착수 | — |
 | QA-01 | 오디오 회귀 검증 | 8 | 미착수 | — |
 | QA-02 | 성능과 브라우저 게이트 | 8 | 미착수 | — |
@@ -106,9 +107,9 @@
 |---|---|
 | Node/npm | 실제 검증: Node 26.4.0 / npm 11.17.0. `.nvmrc`는 Node 24 LTS 권장값이며 Node 24 실행은 별도 미검증 |
 | Next.js/React/TypeScript | Next.js 16.3.5 / React·React DOM 19.3.0 / TypeScript 5.9.3 |
-| 스타일/검사 도구 | Tailwind CSS 4.3.3 / ESLint 9.39.5 / Vitest 5.0.1 / Playwright 1.63.0 |
+| 스타일/검사 도구 | Radix Themes 3.3.0 / Tailwind CSS 4.3.3(레이아웃 유틸리티) / ESLint 9.39.5 / Vitest 5.0.1 / Playwright 1.63.0 |
 | 로컬 저장 래퍼 | 미선택 |
-| Worklet 빌드 도구/메시지 버전 | 미선택 |
+| Worklet 빌드 도구/메시지 버전 | esbuild 0.28.2. 테스트 신호용 `start`/`stop` 명령과 `playing`/`stopped` 응답. Looper 메시지 계약은 미설계 |
 | Stretch DSP 패키지/버전/라이선스 | 도입 단계에서 공식 배포 검증 필요 |
 | Supabase 사용 여부 | 기본 로컬 모드. 클라우드 미설정 |
 | 기준 브라우저/OS/장치/sampleRate | macOS 26.6.2 arm64, Chromium 153.0.8010.12 headless. Desktop Chrome / Pixel 7 viewport 에뮬레이션. 실제 장치와 sampleRate 미측정 |
@@ -125,8 +126,16 @@
 | 2026-09-21 | 이번 작업은 프로젝트 생성과 기본 구성으로 한정 | 사용자의 요청은 문서 확인 및 /Users/ddoni/dev 내 프로젝트 생성. 첨부 문서의 첫 실행 프롬프트는 별도 구현 요청으로 취급하지 않음 | SYS-01 | Phase 0 전체 또는 루핑 기능을 완료로 표시하지 않음 |
 | 2026-09-21 | TypeScript 5.9.3, ESLint 9 계열 유지 | 공식 create-next-app 템플릿과 설치된 eslint-plugin-react의 peer 범위. typescript-eslint는 TypeScript <6.1 요구 | SYS-01 | npm의 최신 TS 7.0.2, ESLint 10을 호환 확인 없이 도입하지 않음. ESLint 9의 지원 종료 경고는 남음 |
 | 2026-09-21 | 초기 화면은 Server Component, 시간 변환은 React/DOM 없는 모듈 | 브라우저 API의 서버 실행 방지와 향후 DSP 테스트 공유 | SYS-01, CLK-01 기반 | 마이크/AudioContext/저장소 초기화 없음. CLK-01 트랜스포트는 아직 미구현 |
-| 2026-09-21 | Worklet 빌드 스크립트는 실제 엔트리 구현과 함께 추가 | 이번 요청 범위에는 Worklet 구현이 포함되지 않음 | SYS-03, SYS-04 | 빈 성공 스크립트 없음. 현재 dev/build는 Next.js만 실행 |
+| 2026-09-21 | Worklet 빌드 스크립트는 실제 엔트리 구현과 함께 추가 | 당시 프로젝트 생성 범위에는 Worklet 구현이 포함되지 않았음 | SYS-03, SYS-04 | 이번 오디오 작업에서 실제 엔트리와 함께 추가함 |
 | 2026-09-21 | Git 미초기화 | Git 동작은 해당 동작의 명시적 요청이 있어야 함 | SYS-01 | init/branch/commit/push/PR/배포 미실행 |
+| 2026-09-21 | Radix Themes를 UI 기반으로 사용 | 사용자가 디자인 시스템 선택. React 19와 호환되는 공식 npm 3.3.0을 확인해 고정 설치 | UX-01, UX-02 기반 | App Router 루트에 테마 적용, 준비 화면과 production E2E 검증. 실제 스튜디오 컨트롤은 기능 구현 때 연결 |
+| 2026-09-21 | 마이크 없이 개발용 440Hz 테스트 신호로 Worklet 경로를 먼저 연결 | Phase 0의 작은 수직 기능 단위. 브라우저 오디오 프레임 안에서 신호를 만들고 명시적 시작·종료를 제공 | SYS-03, SYS-04 | 실청취·브라우저 Worklet 로딩은 사용자 테스트 재개 요청 전까지 미검증. 루핑 엔진과 별개인 임시 신호 |
+| 2026-09-21 | production 빌드는 Next.js의 webpack 옵션 사용 | 이 실행 환경에서 Turbopack의 PostCSS 작업 프로세스가 포트 바인딩 거부로 중단됨. Next.js 16.3.5의 공식 `--webpack` 옵션에서는 빌드 통과 | SYS-01, SYS-03 | 개발 서버는 기본 Turbopack 설정. 다른 환경의 Turbopack 원인과 브라우저 실제 동작은 미검증 |
+| 2026-09-21 | 마이크 권한은 오디오 재생과 별도 동작으로 요청 | 사용자의 명시적 선택 전 입력을 수집하지 않고, 거부 후에도 테스트 신호 경로를 유지하기 위함 | SYS-03, IN-01 | 마이크 스트림은 출력에 연결하지 않음. 취소 뒤 늦게 승인된 스트림은 즉시 종료하도록 구현했으나 브라우저 검증 전 |
+| 2026-09-21 | 환경 진단은 버튼을 누른 뒤 읽기 전용 브라우저 API만 호출 | 진단 자체가 마이크·MIDI 권한 요청이나 저장소 쓰기를 시작하지 않도록 하기 위함 | SYS-04 | API 제공 여부는 실제 연결·로딩·저장 성공이 아님. `StorageManager.estimate()` 수치는 추정치. 브라우저 검증 전 |
+| 2026-09-21 | 첫 공통 시계를 기존 AudioWorklet에 연결하고 오디오 처리 프레임으로만 진행 | UI 타이머를 박자 경계로 사용하지 않고 향후 PCM 녹음·루프와 같은 시계에 연결하기 위함 | CLK-01 | 테스트 신호 Worklet에 임시 통합. 템포 변경은 현재 tick을 앵커로 보존하며 명령은 다음 render block에서 반영. 실제 브라우저·장시간 동기화 미검증 |
+| 2026-09-21 | 메트로놈을 공통 Worklet에서 만들고 테스트 신호와 다른 출력·게인 노드로 연결 | 클릭 경계가 UI 타이머에 의존하지 않고 이후 기본 녹음·WAV에서 클릭을 제외할 수 있는 경로를 마련 | CLK-02 | 실제 녹음·WAV 경로는 아직 없으므로 클릭 제외는 설계 상태. 실청취와 경계 측정, 6/8 묶음·카운트인은 남음 |
+| 2026-09-21 | Google Stitch의 `Web Loop Station DAW` 화면을 현재 기능에 맞게 적용 | 제품 기능보다 앞서 있는 시안의 디자인 언어를 가져오되 동작하지 않는 8트랙·파형·믹서를 실제 기능처럼 표시하지 않기 위함 | UX-01, UX-02 | Radix Themes 유지. Desktop `a79d689fdc0e4efdb13e6711061a640d`, Mobile `5df701419d9c42078c1664dd002dd68d` 참고. 브라우저 시각·상호작용 검증 보류 |
 
 ## 검증 로그
 
@@ -158,12 +167,142 @@
 - 시각 검수: Playwright CLI로 1280×900 데스크톱 및 393×851 모바일 화면을 캡처. Ego는 0×0 viewport와 captureScreenshot 시간 초과가 발생해 캡처 경로를 전환함.
 - 저장 포맷/migration: 생성 또는 변경 없음.
 
+### 2026-09-21 — Radix Themes UI 기반 / UX-01·UX-02 준비
+
+- 변경 파일: `AGENTS.md`, `package.json`, `package-lock.json`, `src/components/ui/studio-theme.tsx`, `src/app/{layout.tsx,page.tsx,globals.css}`, `tests/e2e/home.spec.ts`, `docs/PROGRESS.md`.
+- 구현: Radix Themes CSS와 전역 다크 테마(amber/slate, 중간 radius)를 연결함. 첫 화면에 Radix Card, Button, Badge, Heading, Text, Flex, Separator를 실제 사용함. Tailwind는 배치 유틸리티로 유지하고 기존 별도 색상 팔레트는 Radix 토큰으로 대체함. 미구현 기능 버튼은 설명과 연결된 비활성 상태를 유지함.
+- 사용 경로: 새 화면은 `@radix-ui/themes`에서 필요한 컴포넌트를 직접 가져오면 루트 테마를 공유함. Dialog, AlertDialog, Select, Slider, Switch, Tabs 등은 패키지에 포함되지만 해당 기능을 구현할 때 실제 동작과 함께 연결함.
+- 의존성 확인: 공식 Radix Themes 문서의 CSS·Theme 구성과 npm 배포 정보 확인. 3.3.0은 React 19 peer 범위를 포함함. lockfile 비교 결과 기존 패키지 버전 변경/삭제 없이 새 패키지 76개 추가됨.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm install @radix-ui/themes@3.3.0 --save-exact | 성공. npm audit 취약점 0개 |
+| npm ci | lockfile 기반 재설치 성공. 467개 패키지 설치, npm audit 취약점 0개 |
+| npm ls @radix-ui/themes --depth=0 | 3.3.0 확인 |
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| npm run test | 1개 파일, 21개 테스트 통과 |
+| npm run build | 성공. npm ci 이후 production 빌드도 재확인 |
+| npm run test:e2e | production Chromium 데스크톱/모바일 각 1개, 총 2개 통과. Radix 테마·컴포넌트·버튼 실제 배경과 기존 접근성 흐름 확인 |
+| npx react-doctor@latest --verbose --scope changed | 변경 범위 3개 파일 스캔, 100/100, 진단 없음 |
+| Playwright CLI 시각 확인 | 최종 production 화면 1280×900 / 393×851 캡처. 제목·설명 간격, 버튼 상태, 모바일 줄바꿈과 넘침 확인. PNG는 /tmp에만 생성 |
+
+- 한계: 실제 녹음·루핑·저장 UI와 상태별 컨트롤은 아직 미구현이다. 데스크톱/모바일 캡처는 Chromium headless이며 실제 오디오 기기 검증이 아니다. Ego 브라우저는 0×0 뷰포트에서 캡처가 시간 초과되어 Playwright로 시각 확인함.
+- 다음 작업: 남은 Phase 0의 사용자 동작 기반 AudioContext, Worklet 로딩, 마이크 권한과 환경 진단을 구현할 때 Radix 컨트롤을 실제 엔진 상태에 연결함.
+
+### 2026-09-21 — 사용자 시작 오디오와 개발용 Worklet 신호 / SYS-03·SYS-04 부분 구현
+
+- 변경 파일: `.gitignore`, `package.json`, `package-lock.json`, `src/audio/engine/test-tone-engine.ts`, `src/audio/worklets/test-tone-processor.ts`, `src/components/audio/audio-setup.tsx`, `src/app/page.tsx`, `src/lib/i18n/ko.ts`, `docs/PROGRESS.md`. 이전 Radix UI 변경은 보존함.
+- 구현: 사용자 클릭에서만 AudioContext를 생성·재개함. Worklet을 별도 esbuild 엔트리로 빌드해 `/audio/test-tone-processor.js`로 로드하도록 연결함. 출력에 연결된 Worklet은 실제 오디오 블록 길이로 낮은 음량의 440Hz 개발용 신호를 생성하고, 켜기/끄기 명령에 응답함. 종료/시작 취소/비정상 종료 시 node·gain·port·context를 정리함. 마이크 접근과 입력 모니터링은 없음.
+- UI: Radix Button/Text로 오디오 시작, 테스트 신호 켜기/끄기, 재개, 종료, 오류·상태, AudioContext의 sampleRate를 표시함. Worklet 준비 전 신호 조작은 노출하지 않음.
+- 빌드: `esbuild@0.28.2`를 정확한 버전으로 설치함. `npm run dev`와 `npm run build`가 Worklet을 선행 생성함. Worklet 소스 수정 중에는 별도 `npm run watch:audio`가 필요함. 생성된 `public/audio/*.js`는 Git에서 제외되며 배포 빌드에서 재생성됨.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm install -D esbuild@0.28.2 --save-exact | 성공. npm audit 취약점 0개 |
+| npm ci / npm ls --depth=0 | lockfile 기반 469개 패키지 재설치 성공, 직접 의존성 버전 확인. ESLint 지원 종료와 미승인 install script 안내는 남음 |
+| npm run build:audio | 성공. 테스트 신호 Worklet JS 1.5 kB 생성 |
+| npm run lint | 최초 React 렌더 중 ref 접근 오류 발견. phase 상태를 사용하도록 수정한 뒤 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | 최초 Turbopack에서 PostCSS 자식 프로세스의 포트 바인딩 거부로 실패. 권한 상향 재시도도 동일. `next build --webpack` 설정 후 성공, 정적 / 및 /_not-found 생성 |
+| npx react-doctor@latest --verbose --scope changed | 오디오 설정 컴포넌트 복잡도 경고를 UI 컨트롤 분리로 해소. 재검사 8개 파일, 100/100, 진단 없음 |
+| git diff --check / npm ls esbuild --depth=0 | 공백 오류 없음 / esbuild 0.28.2 확인 |
+| npm run test / npm run test:e2e / 브라우저 실청취 | 사용자 요청에 따라 실행하지 않음 |
+
+- 남은 항목: 실제 브라우저의 Worklet URL 로딩, 출력 소리, 취소/재개/정리, 마이크 권한 거부와 장치 없음, MIDI·저장소·격리 모드·입력 설정 진단 미검증 또는 미구현. Phase 0과 SYS-03/04의 인수 기준은 아직 충족하지 않음.
+- 다음 작업: 사용자의 테스트 재개 요청 이후 브라우저 검증을 수행하고, 별도 작은 작업으로 마이크 권한·장치 상태와 환경 진단을 구현함.
+
+### 2026-09-21 — 마이크 권한과 입력 장치 설정 / SYS-03·SYS-04·IN-01 부분 구현
+
+- 변경 파일: `src/audio/input/microphone-session.ts`, `src/components/audio/microphone-setup.tsx`, `src/app/page.tsx`, `src/lib/i18n/ko.ts`, `tests/e2e/home.spec.ts`, `docs/PROGRESS.md`.
+- 구현: 별도 사용자 클릭에서 `getUserMedia()`로 마이크 권한을 요청함. 음악 입력 처리 옵션을 OFF로 희망 요청하고 실제 적용 여부는 `getSettings()`로 표시함. 권한 거부, 장치 없음, 장치 읽기 실패, 제약 불일치, 요청 중단, 연결 끊김을 구분함. 권한 대기 중 취소와 장치 전환 실패 시 기존 스트림 보존, 늦게 도착한 스트림 정리, 장치 변경·track 종료 감지를 추가함. 스트림은 오디오 출력·녹음·저장에 연결하지 않음.
+- UI: Radix Button/Select로 마이크 요청·취소·해제와 허용 후 장치 선택을 제공함. 브라우저 권한 창 자체는 앱에서 닫을 수 없음을 취소 안내에 명시함. footer의 개인정보 문구를 연결 상태와 무관하게 정확한 표현으로 수정하고 기존 E2E 기대 문구도 갱신함.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | 성공. / 및 /_not-found 정적 생성 |
+| npx react-doctor@latest --verbose | 새 마이크 컴포넌트 복잡도 경고를 화면 구성 분리로 해소. 17개 파일 전체 스캔, 100/100, 진단 없음 |
+| npm run test / npm run test:e2e / 브라우저 권한·장치 검증 | 사용자 요청에 따라 실행하지 않음 |
+
+- 남은 항목: 실제 권한 허용·거부·장치 없음·전환·연결 끊김 및 취소 후 스트림 해제는 브라우저에서 확인하지 않음. 채널 선택과 실제 PCM 녹음·모니터링은 아직 구현하지 않음. SYS-03/04와 IN-01의 인수 기준은 완료로 변경하지 않음.
+- 다음 작업: Phase 0 환경 진단(MIDI, 저장소, 격리 모드 지원)과 테스트 재개 후 실제 브라우저 검증.
+
+### 2026-09-21 — 읽기 전용 환경 진단 / SYS-04 구현 완료·미검증
+
+- 변경 파일: `src/lib/environment/diagnostics.ts`, `src/components/audio/environment-diagnostics.tsx`, `src/app/page.tsx`, `src/lib/i18n/ko.ts`, `docs/PROGRESS.md`.
+- 구현: 명시적인 `환경 확인` 클릭 후 보안 연결, AudioWorklet·마이크·Web MIDI·IndexedDB API 제공 여부, 교차 출처 격리, 저장소 사용량·할당량 추정치와 영구 저장 허용 상태를 표시함. 마이크/MIDI 권한 요청, IndexedDB 열기·쓰기, 영구 저장 요청은 하지 않음. AudioContext sampleRate와 실제 입력 설정은 각각 기존 오디오·마이크 UI에서 해당 기능을 시작한 후 표시함.
+- 표시 한계: API가 보여도 실제 장치 연결, Worklet 파일 로딩, IndexedDB 쓰기 성공은 별도 검증이 필요함. 저장소 수치는 브라우저 추정치이며 `persisted()`를 읽을 수 없는 경우에는 확인 불가로 표시함.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | Radix Text의 `as="dt"` 타입 오류 수정 후 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | 성공. / 및 /_not-found 정적 생성 |
+| npx react-doctor@latest --verbose | 숫자 포맷터 재생성 경고 수정 후 19개 파일 전체 스캔, 100/100, 진단 없음 |
+| npm run test / npm run test:e2e / 브라우저 동작 확인 | 사용자 요청에 따라 실행하지 않음 |
+
+- 남은 항목: 지원·미지원 브라우저에서 실제 표시와 저장소 조회 실패 상태를 확인하지 않음. 마이크 장치·오디오 출력·Worklet 로딩도 계속 미검증. Phase 0 완료 판단은 사용자 테스트 재개 후 진행함.
+- 다음 작업: 테스트 재개 후 Phase 0 브라우저 검증 및 발견되는 문제 수정. 이후 한 트랙 PCM 녹음과 공통 오디오 시계를 작은 기능 단위로 진행.
+
+### 2026-09-21 — AudioWorklet 공통 시계 / CLK-01 부분 구현
+
+- 변경 파일: `src/audio/transport/audio-frame-clock.ts`, `src/audio/worklets/test-tone-processor.ts`, `src/audio/engine/test-tone-engine.ts`, `src/components/audio/transport-controls.tsx`, `src/components/audio/audio-setup.tsx`, `src/lib/i18n/ko.ts`, `docs/PROGRESS.md`.
+- 구현: AudioWorklet의 각 render block에서 실제 출력 배열 길이만큼 위치 프레임을 진행함. 시작·정지·처음으로와 40~240의 정수 BPM 및 3/4·4/4·6/8·7/8 설정을 지원함. BPM 변경 시 현재 음악 tick을 새 템포 앵커로 유지함. Worklet이 보낸 스냅샷만 화면 상태에 반영하고, 재생 중 약 10Hz의 경량 표시 업데이트를 사용함.
+- UI: Radix 버튼·숫자 입력·Select로 컨트롤을 제공하고 현재 마디·박, 실제 적용된 BPM·박자표를 표시함. 오디오 Worklet이 준비되기 전에는 조작을 비활성화함. 기존 테스트 신호 켜기/끄기와 트랜스포트 시작/정지는 별개임.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | Worklet 4.5 kB 생성, Next.js production build와 정적 / 및 /_not-found 생성 성공 |
+| npx react-doctor@latest --verbose | 21개 파일 전체 스캔, 100/100, 진단 없음 |
+| npm run test / npm run test:e2e / 실제 브라우저·실청취 | 사용자 요청에 따라 실행하지 않음 |
+
+- 남은 항목: 현재 시계는 녹음·루프·메트로놈을 구동하지 않음. Tap Tempo, 명령 예약·퀀타이즈, 실제 장치에서의 위치·일시 중지·재개 동작, 장시간 동기화도 미검증. CLK-01 및 Phase 1 완료 기준에는 도달하지 않음.
+- 다음 작업: 테스트가 재개되면 Phase 0과 이 시계의 브라우저 동작을 검증. 이후 같은 Worklet 시계에 단일 트랙 PCM 캡처를 연결.
+
+### 2026-09-21 — 오디오 프레임 메트로놈 / CLK-02 부분 구현
+
+- 변경 파일: `src/audio/transport/audio-frame-clock.ts`, `src/audio/metronome/click-voice.ts`, `src/audio/worklets/test-tone-processor.ts`, `src/audio/engine/test-tone-engine.ts`, `src/components/audio/metronome-controls.tsx`, `src/components/audio/audio-setup.tsx`, `src/lib/i18n/ko.ts`, `docs/PROGRESS.md`.
+- 구현: 공통 시계의 현재 위치와 절대 beat tick에서 각 클릭 프레임을 계산함. 매번 반올림한 박 길이를 누적하지 않으며 실제 Worklet 처리 블록 안의 해당 프레임에서 강박·약박 클릭을 시작함. 클릭은 테스트 신호와 다른 두 번째 Worklet 출력에서 생성하고 별도 GainNode로 음량을 조절함. 기본 OFF이고 시계가 정지하면 클릭도 짧게 감쇠함.
+- UI: Radix Switch와 Slider로 ON/OFF 및 0~100 음량을 제공함. 마이크 권한 없이 사용할 수 있으며 시계가 진행 중일 때만 클릭이 울리도록 구성함. 지금은 마디 첫 박만 강박이며 6/8의 추가 묶음 악센트와 카운트인은 미구현이라고 표시함.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | Worklet 7.3 kB 생성, Next.js production build와 정적 / 및 /_not-found 생성 성공 |
+| npx react-doctor@latest --verbose | 23개 파일 전체 스캔, 100/100, 진단 없음 |
+| npm run test / npm run test:e2e / 실제 브라우저·실청취 | 사용자 요청에 따라 실행하지 않음 |
+
+- 남은 항목: 실제 장치에서 클릭 소리·음량·시작/정지와 44.1/48kHz 박 경계는 미검증. 클릭을 제외한 PCM 녹음·WAV 내보내기 자체가 아직 없으므로 신호 분리만 구현한 상태. CLK-02 완료 기준에 도달하지 않음.
+- 다음 작업: 같은 공통 시계에 연결되는 단일 트랙 PCM 캡처와 첫 반복 전환을 작은 단위로 진행. 테스트 재개 시 Phase 0 및 공통 시계·메트로놈 브라우저 검증을 먼저 수행.
+
+### 2026-09-21 — Stitch 스튜디오 화면 적용 / UX-01·UX-02 부분 구현
+
+- 변경 파일: `src/app/page.tsx`, `src/app/globals.css`, `src/components/ui/studio-theme.tsx`, `src/components/audio/{audio-setup,transport-controls,metronome-controls,microphone-setup,environment-diagnostics}.tsx`, `src/lib/i18n/ko.ts`, `tests/e2e/home.spec.ts`, `docs/PROGRESS.md`. 기존 미커밋 메트로놈 구현을 보존함.
+- 디자인 출처: Google Stitch 프로젝트 `projects/6884002784375808500`의 Desktop Studio Console·Mobile Main Studio 시안과 `Studio Loop Console` 디자인 시스템. 어두운 하드웨어 패널, 민트 상태색, 큰 매립형 마디·박 표시, 좁은 화면의 카드 배열을 적용함. Radix Themes 3.3.0은 유지하고 accent를 jade로 변경함.
+- 실제 기능 경계: 오디오·시계·메트로놈·마이크·환경 진단은 기존 동작을 유지함. 시안의 다중 트랙·파형·믹서·FX·프로젝트 라이브러리는 아직 구현되지 않았으므로 첫 트랙의 빈 상태와 비활성 녹음·프로젝트 버튼으로 표현함. 시계 설명도 메트로놈 연결 상태에 맞게 수정함.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | 첫 실행은 교체 중 남은 CSS 조각의 문법 오류로 실패. 조각 제거 후 Worklet 생성 및 정적 페이지 빌드 성공 |
+| npx react-doctor@latest --verbose --scope changed / git diff --check | 변경 파일 14개 스캔, 100/100, 진단 없음 / 공백 오류 없음 |
+| npm run test / npm run test:e2e / 브라우저 시각·상호작용 확인 | 사용자 요청에 따라 실행하지 않음. E2E의 jade 테마 기대값과 다중 Card 조회만 변경 |
+
+- 남은 항목: 실제 기기에서 반응형 배치·글자 넘침·포커스·스크린리더·오디오 조작을 확인하지 않음. 시안 전체 기능 구현이나 UX-01/02 완료를 의미하지 않음.
+- 다음 작업: 사용자 테스트 재개 요청 시 디자인·오디오 동작을 브라우저에서 확인하고, 이후 단일 트랙 PCM 녹음의 실제 수직 기능을 연결.
+
 ## 알려진 제한과 차단 항목
 
-프로젝트 기반만 준비되었다. AudioContext, AudioWorklet, 환경 진단, 마이크 권한 흐름, PCM 녹음, 루핑, 저장, FX, MIDI, 클라우드 기능은 미구현이다. 화면은 이 상태를 명시하며 새 프로젝트/데모 버튼은 이유와 함께 비활성화한다. 외부 폰트나 오디오 에셋 요청 없이 기본 화면을 렌더한다.
+AudioContext와 개발용 테스트 신호 AudioWorklet, 마이크 권한·장치 흐름, 환경 진단, 공통 시계·메트로놈의 코드·UI를 추가했지만 실제 브라우저 로딩, 권한 동작, 진단·시계 표시, 실청취는 확인하지 않았다. 채널 선택, PCM 녹음, 루핑, 저장, FX, 실제 MIDI 연결, 클라우드 기능은 미구현이다. 화면은 이 상태를 명시하며 새 프로젝트/데모 버튼은 이유와 함께 비활성화한다. 외부 폰트나 오디오 에셋 요청 없이 기본 화면을 렌더한다.
 
 시간 변환 단위 테스트는 실제 오디오 시계의 동작이나 장시간 동기화를 보장하지 않는다. 실제 마이크·헤드폰·인터페이스 청취 및 Chrome/Edge/Firefox/Safari 지원 범위 검증은 남아 있다.
 
 ## 다음 Codex 작업
 
-사용자가 구현을 요청하면 AGENTS.md와 현재 진행 상태를 읽고 **남은 Phase 0**을 이어간다. 사용자 클릭으로 시작하는 AudioContext, 실제 Worklet 엔트리와 build/watch 파이프라인, 테스트 신호, 마이크 선택/거부·취소 흐름, 모니터 기본 OFF, 환경 진단을 가장 작은 기능 단위로 구현한다. production Worklet URL, 브라우저 실제 오디오 처리, 중복 Context 방지, dispose를 검증한 뒤 Phase 0 완료 여부를 판단한다.
+사용자가 구현을 요청하면 AGENTS.md와 현재 진행 상태를 읽는다. 모니터링은 기본 OFF로 유지한다. 테스트 재개 요청 전에는 자동·브라우저 테스트를 실행하지 않는다. 재개되면 production Worklet URL, 실제 오디오 처리, 중복 Context 방지, dispose, 마이크 허용·거부·취소·장치 전환, 환경 진단의 지원·미지원·조회 실패 표시, 공통 시계의 시작·정지·템포 변경·재개와 메트로놈의 강약박·음량을 검증한 뒤 Phase 0 완료 여부를 판단한다. 이후 Phase 1의 한 트랙 PCM 녹음과 공통 시계 연결을 작은 단위로 진행한다.

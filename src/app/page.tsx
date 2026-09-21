@@ -1,38 +1,97 @@
+import { Badge, Button, Card, Heading, Text } from "@radix-ui/themes";
+import { AudioSetup } from "@/components/audio/audio-setup";
+import { EnvironmentDiagnostics } from "@/components/audio/environment-diagnostics";
+import { MicrophoneSetup } from "@/components/audio/microphone-setup";
 import { ko } from "@/lib/i18n/ko";
 
 export default function Home() {
   return (
-    <div className="mx-auto flex min-h-svh max-w-5xl flex-col px-6 sm:px-12">
+    <div className="studio-shell">
       <a className="skip-link" href="#main">{ko.skipToContent}</a>
-      <header className="flex flex-wrap items-center justify-between gap-4 py-8">
-        <span className="brand text-xl font-semibold tracking-tight">{ko.appName}</span>
-        <span className="rounded-full border border-line px-3 py-1.5 text-xs text-muted">{ko.status}</span>
+      <header className="studio-topbar">
+        <div className="studio-brand">
+          <span className="studio-brand-mark" aria-hidden="true"><span /><span /><span /><span /></span>
+          <Text as="span" weight="bold" className="studio-wordmark">LOOP/STATION</Text>
+          <span className="studio-edition">WEB</span>
+        </div>
+        <div className="studio-header-status">
+          <span className="studio-status-led" aria-hidden="true" />
+          <Text as="span" size="1">{ko.studioLocal}</Text>
+          <Badge color="jade" variant="soft" size="1">{ko.status}</Badge>
+        </div>
       </header>
 
-      <main id="main" className="flex flex-1 flex-col justify-center py-10 sm:py-20">
-        <section aria-labelledby="welcome-title" className="rounded-3xl border border-line bg-panel p-7 sm:p-14">
-          <div className="loop-mark mb-10" aria-hidden="true"><span /><span /></div>
-          <p className="mb-4 text-sm text-accent">{ko.introduction}</p>
-          <h1 id="welcome-title" className="text-3xl leading-snug break-keep text-balance font-semibold tracking-tight sm:text-5xl">{ko.title}</h1>
-          <p id="availability" className="mt-6 max-w-lg text-base leading-7 text-muted">{ko.availability}</p>
-          <div className="mt-9 flex flex-wrap gap-3">
-            <button type="button" disabled aria-describedby="availability" className="min-h-12 rounded-xl border border-line bg-surface px-5 text-sm text-muted disabled:cursor-not-allowed">{ko.newProject}</button>
-            <button type="button" disabled aria-describedby="availability" className="min-h-12 rounded-xl border border-line px-5 text-sm text-muted disabled:cursor-not-allowed">{ko.demo}</button>
-          </div>
-        </section>
+      <main id="main" className="studio-main">
+        <div className="studio-heading">
+          <Text as="p" size="1" className="studio-overline">{ko.studioOverline}</Text>
+          <Heading as="h1" id="welcome-title" size={{ initial: "6", sm: "8" }} className="studio-page-title">{ko.title}</Heading>
+          <Text as="p" id="availability" size="2" className="studio-lead">{ko.availability}</Text>
+        </div>
 
-        <section aria-labelledby="next-step-title" className="mt-8 grid gap-3 px-2 sm:grid-cols-[1fr_2fr] sm:gap-10">
-          <h2 id="next-step-title" className="text-sm text-muted">{ko.nextStepTitle}</h2>
-          <div>
-            <h3 className="text-base font-medium">{ko.nextStep}</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">{ko.nextStepDescription}</p>
+        <div className="studio-layout">
+          <div className="studio-primary">
+            <Card size="3" asChild>
+              <section className="studio-panel studio-control-panel" aria-labelledby="control-title">
+                <div className="studio-panel-header">
+                  <div>
+                    <Text as="p" size="1" className="studio-overline">{ko.studioControlOverline}</Text>
+                    <Heading as="h2" id="control-title" size="5">{ko.studioControlTitle}</Heading>
+                  </div>
+                  <Badge color="jade" variant="outline" size="2">{ko.studioLiveEngine}</Badge>
+                </div>
+                <Text as="p" size="2" className="studio-panel-intro">{ko.nextStepDescription}</Text>
+                <AudioSetup />
+              </section>
+            </Card>
+
+            <Card size="3" asChild>
+              <section className="studio-panel studio-track-panel" aria-labelledby="track-title">
+                <div className="studio-panel-header">
+                  <div className="studio-track-name">
+                    <span className="studio-track-number" aria-hidden="true">01</span>
+                    <div>
+                      <Text as="p" size="1" className="studio-overline">{ko.studioTrackOverline}</Text>
+                      <Heading as="h2" id="track-title" size="5">{ko.studioTrackTitle}</Heading>
+                    </div>
+                  </div>
+                  <Badge color="gray" variant="outline">{ko.studioTrackIdle}</Badge>
+                </div>
+                <div className="studio-track-well">
+                  <div className="studio-track-ruler" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span></div>
+                  <div className="studio-track-empty">
+                    <span className="studio-empty-icon" aria-hidden="true">＋</span>
+                    <Text as="p" size="3" weight="medium">{ko.studioTrackEmpty}</Text>
+                    <Text as="p" size="2" color="gray">{ko.studioTrackEmptyHint}</Text>
+                  </div>
+                </div>
+                <div className="studio-track-actions">
+                  <Button type="button" size="3" disabled aria-describedby="availability" className="studio-record-button">{ko.studioRecordUnavailable}</Button>
+                  <Text as="p" size="1" color="gray">{ko.studioTrackLimit}</Text>
+                </div>
+              </section>
+            </Card>
           </div>
-        </section>
+
+          <aside className="studio-sidebar" aria-label={ko.studioSetupTitle}>
+            <Card size="3" asChild><div className="studio-panel studio-side-panel"><MicrophoneSetup /></div></Card>
+            <Card size="3" asChild><div className="studio-panel studio-side-panel"><EnvironmentDiagnostics /></div></Card>
+            <Card size="3" asChild>
+              <section className="studio-panel studio-side-panel" aria-labelledby="project-title">
+                <Text as="p" size="1" className="studio-overline">{ko.studioProjectOverline}</Text>
+                <Heading as="h2" id="project-title" size="4">{ko.studioProjectTitle}</Heading>
+                <Text as="p" size="2" color="gray" mt="2">{ko.studioProjectDescription}</Text>
+                <div className="studio-project-actions">
+                  <Button type="button" variant="soft" disabled aria-describedby="availability">{ko.newProject}</Button>
+                  <Button type="button" variant="outline" disabled aria-describedby="availability">{ko.demo}</Button>
+                </div>
+              </section>
+            </Card>
+          </aside>
+        </div>
       </main>
-
-      <footer className="flex flex-wrap justify-between gap-3 border-t border-line py-6 text-xs leading-5 text-muted">
-        <span>{ko.localFirst}</span>
-        <span>{ko.privacy}</span>
+      <footer className="studio-footer">
+        <Text as="span" size="1">{ko.localFirst}</Text>
+        <Text as="span" size="1">{ko.privacy}</Text>
       </footer>
     </div>
   );

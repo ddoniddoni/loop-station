@@ -19,6 +19,8 @@
 
 # production
 /build
+/public/audio/*.js
+/public/audio/*.js.map
 
 # misc
 .DS_Store
