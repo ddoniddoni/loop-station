@@ -1,11 +1,12 @@
 "use client";
 
-import { Button, Flex, Text } from "@radix-ui/themes";
+import { Button, Flex, Heading, Text } from "@radix-ui/themes";
 import { useEffect, useRef, useState } from "react";
 import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine";
 import type { TransportSnapshot } from "@/audio/transport/audio-frame-clock";
 import { MetronomeControls } from "@/components/audio/metronome-controls";
 import { TransportControls } from "@/components/audio/transport-controls";
+import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
 
 type AudioPhase = "idle" | "starting" | "ready" | "playing" | "suspended" | "stopping" | "error";
@@ -31,9 +32,9 @@ type AudioControlsProps = {
 
 function AudioControls({ phase, onStart, onStop, onResume, onToneStart, onToneStop }: AudioControlsProps) {
   return (
-    <Flex gap="3" wrap="wrap" className="studio-audio-actions">
+    <Flex gap="2" wrap="wrap" className="station-audio-actions">
       {(phase === "idle" || phase === "error") && (
-        <Button type="button" onClick={onStart}>{phase === "error" ? ko.audioRetry : ko.audioStart}</Button>
+        <Button type="button" onClick={onStart}><StudioIcon name="power" />{phase === "error" ? ko.audioRetry : ko.audioStart}</Button>
       )}
       {phase === "ready" && (
         <Button type="button" onClick={onToneStart}>{ko.toneStart}</Button>
@@ -186,19 +187,23 @@ export function AudioSetup() {
   const status = issue ?? phaseStatus[phase];
 
   return (
-    <div className="studio-audio-stack">
-      <AudioControls
-        phase={phase}
-        onStart={() => void startAudio()}
-        onStop={() => void stopAudio()}
-        onResume={() => void resumeAudio()}
-        onToneStart={() => engineRef.current?.startTone()}
-        onToneStop={() => engineRef.current?.stopTone()}
-      />
-      <Text as="p" role={phase === "error" ? "alert" : "status"} size="2" color={issue ? "red" : "gray"} mt="3" className="studio-engine-status">
-        {status}
-        {sampleRate !== null && phase !== "error" && <> · {ko.sampleRate}: {sampleRate} Hz</>}
-      </Text>
+    <div className="station-audio-console">
+      <section className="station-audio-power" aria-labelledby="audio-title">
+        <Heading as="h2" id="audio-title" size="3">{ko.audioPanelTitle}</Heading>
+        <Text as="p" size="2" color="gray">{ko.audioPanelDescription}</Text>
+        <AudioControls
+          phase={phase}
+          onStart={() => void startAudio()}
+          onStop={() => void stopAudio()}
+          onResume={() => void resumeAudio()}
+          onToneStart={() => engineRef.current?.startTone()}
+          onToneStop={() => engineRef.current?.stopTone()}
+        />
+        <Text as="p" role={phase === "error" ? "alert" : "status"} size="2" color={issue ? "red" : "gray"} className="station-engine-status">
+          {status}
+          {sampleRate !== null && phase !== "error" && <> · {sampleRate / 1000} kHz</>}
+        </Text>
+      </section>
       <TransportControls
         enabled={phase === "ready" || phase === "playing"}
         snapshot={transport}

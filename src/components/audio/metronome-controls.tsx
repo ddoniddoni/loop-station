@@ -1,6 +1,7 @@
 "use client";
 
-import { Flex, Heading, Slider, Switch, Text } from "@radix-ui/themes";
+import { Badge, Heading, Slider, Switch, Text } from "@radix-ui/themes";
+import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
 
 type MetronomeControlsProps = {
@@ -15,21 +16,24 @@ export function MetronomeControls({ audioReady, enabled, volume, onEnabledChange
   const ready = audioReady && enabled !== null;
 
   return (
-    <section aria-labelledby="metronome-title" className="studio-subsection studio-metronome">
-      <Heading as="h3" id="metronome-title" size="3" weight="medium">{ko.metronomeTitle}</Heading>
-      <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.metronomeDescription}</Text>
-      <Flex align="center" gap="3" mt="4">
-        <Switch id="metronome-enabled" checked={enabled ?? false} disabled={!ready} onCheckedChange={onEnabledChange} />
+    <section aria-labelledby="metronome-title" className="station-metronome">
+      <div className="station-metro-heading">
+        <Heading as="h2" id="metronome-title" size="3">{ko.metronomeTitle}</Heading>
+        <Badge variant="soft" color={enabled ? "jade" : "gray"}>{enabled ? ko.microphoneSettingOn : ko.microphoneSettingOff}</Badge>
+      </div>
+      <div className="station-metro-switch">
+        <Switch id="metronome-enabled" size="3" checked={enabled ?? false} disabled={!ready} onCheckedChange={onEnabledChange} />
         <label htmlFor="metronome-enabled"><Text as="span" size="2">{ko.metronomeEnabled}</Text></label>
-      </Flex>
-      <div className="mt-5 max-w-xs">
-        <Text as="p" id="metronome-volume-label" size="2" mb="2">{ko.metronomeVolume}: {volume}%</Text>
+      </div>
+      <div className="station-metro-volume">
+        <Text as="p" id="metronome-volume-label" size="2">{ko.metronomeVolume}<span>{volume}%</span></Text>
         <Slider aria-labelledby="metronome-volume-label" min={0} max={100} step={1} value={[volume]}
           disabled={!ready} onValueChange={(values) => onVolumeChange(values[0] ?? 0)} />
       </div>
-      <Text as="p" size="1" color="gray" mt="3">
-        {ready ? ko.metronomeBehavior : ko.transportNeedsAudio}
-      </Text>
+      <details className="station-help">
+        <summary><StudioIcon name="info" size={16} />{ko.metronomeHelp}</summary>
+        <Text as="p" size="2" color="gray">{ready ? ko.metronomeBehavior : ko.transportNeedsAudio}</Text>
+      </details>
     </section>
   );
 }

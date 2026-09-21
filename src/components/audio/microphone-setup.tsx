@@ -201,7 +201,7 @@ export function MicrophoneSetup() {
 
   return (
     <section aria-labelledby="microphone-title" className="studio-side-content">
-      <Heading as="h2" id="microphone-title" size="3" weight="medium">{ko.microphoneTitle}</Heading>
+      <Heading as="h3" id="microphone-title" size="3" weight="medium">{ko.microphoneTitle}</Heading>
       <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.microphoneDescription}</Text>
       <MicrophoneControls
         phase={phase}

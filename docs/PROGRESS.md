@@ -5,7 +5,7 @@
 - 기준일: 2026-09-21
 - 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0은 부분 구현·미검증, Phase 1은 공통 시계부터 부분 구현.**
 - 프로젝트 위치: `/Users/ddoni/dev/loop-station`. Next.js App Router 기반 한국어 준비 화면과 순수 시간 변환 함수를 생성함.
-- UI 기반: Radix Themes 3.3.0에 Google Stitch의 `Web Loop Station DAW` 디자인 언어를 적용한 반응형 스튜디오 셸. 사용자 클릭으로 AudioContext/개발용 테스트 신호, 별도의 마이크 권한·장치 설정, 읽기 전용 환경 진단, 오디오 프레임 기반 공통 시계와 메트로놈 UI를 제공함. 실제 녹음 연주 화면은 미구현.
+- UI 기반: Radix Themes 3.3.0과 Stitch의 스튜디오 배치를 유지하면서 Pretendard, 44px 일반 조작·56px 주요 조작, 공통 SVG 아이콘·여백·색상·모서리 기준으로 정리함. 데스크톱과 모바일에서 같은 트랙·라이브러리·믹서·설정 메뉴가 실제 영역으로 이동함. 작은 화면에서도 8개 트랙과 모든 설정에 접근할 수 있음. 실제 녹음·믹서 기능은 미구현으로 표시함.
 - 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 오디오·마이크·환경 진단·공통 시계·메트로놈 변경은 사용자 요청에 따라 테스트를 중단했고, 실제 브라우저 권한·장치·실청취도 미검증.
 - 다음 작업: 사용자 요청 후 Worklet, 마이크 권한·장치, 환경 진단, 공통 시계와 메트로놈을 실제 브라우저에서 검증. 그 전에는 Phase 0과 CLK-01/02를 완료로 표시하지 않음.
 - 상세 명세: `LOOP_STATION_SPEC.md`
@@ -93,8 +93,8 @@
 | CLOUD-02 | 사용자 데이터 보안 | 7 | 미착수 | — |
 | CLOUD-03 | 재시도 가능한 동기화 | 7 | 미착수 | — |
 | CLOUD-04 | 읽기 전용 링크 공유 | 7 | 미착수 | — |
-| UX-01 | 통합 작업 화면 | 4 | 부분 구현 | Stitch 기반 스튜디오 셸에 현재 오디오·시계·메트로놈·마이크·진단을 배치하고 빈 트랙과 미구현 프로젝트 작업을 구분함. 실제 클립 그리드·믹서·편집기 등은 미구현 |
-| UX-02 | 반응형과 접근성 | 8 | 부분 구현 | 데스크톱/모바일 레이아웃, 44px 버튼, 제목·상태·포커스·건너뛰기 링크를 코드에 적용함. 브라우저·키보드·터치·스크린리더 검증은 사용자 요청까지 보류 |
+| UX-01 | 통합 작업 화면 | 4 | 부분 구현 | Stitch의 데스크톱 라이브러리·8트랙·인스펙터·믹서와 모바일 트랙 카드·하단 메뉴 구조를 빈 상태로 구현. 실제 트랙 녹음·클립·믹서 조작·FX는 미구현 |
+| UX-02 | 반응형과 접근성 | 8 | 부분 구현 | Pretendard 로컬 폰트, 44px 버튼·56px 주요 조작, 화면 간 동일한 앵커 메뉴, 아이콘·한국어 레이블·상태·비활성 이유·포커스·reduced-motion·모바일 safe area 구현. 브라우저·키보드·터치·스크린리더 검증은 사용자 요청까지 보류 |
 | UX-03 | 첫 사용 안내와 데모 | 2 | 미착수 | — |
 | QA-01 | 오디오 회귀 검증 | 8 | 미착수 | — |
 | QA-02 | 성능과 브라우저 게이트 | 8 | 미착수 | — |
@@ -108,6 +108,7 @@
 | Node/npm | 실제 검증: Node 26.4.0 / npm 11.17.0. `.nvmrc`는 Node 24 LTS 권장값이며 Node 24 실행은 별도 미검증 |
 | Next.js/React/TypeScript | Next.js 16.3.5 / React·React DOM 19.3.0 / TypeScript 5.9.3 |
 | 스타일/검사 도구 | Radix Themes 3.3.0 / Tailwind CSS 4.3.3(레이아웃 유틸리티) / ESLint 9.39.5 / Vitest 5.0.1 / Playwright 1.63.0 |
+| 웹폰트 | Pretendard Variable v1.3.9, 공식 WOFF2 2,057,688 bytes. next/font/local, display swap, preload false. SIL OFL 1.1 라이선스를 public/fonts/pretendard-OFL.txt에 포함 |
 | 로컬 저장 래퍼 | 미선택 |
 | Worklet 빌드 도구/메시지 버전 | esbuild 0.28.2. 테스트 신호용 `start`/`stop` 명령과 `playing`/`stopped` 응답. Looper 메시지 계약은 미설계 |
 | Stretch DSP 패키지/버전/라이선스 | 도입 단계에서 공식 배포 검증 필요 |
@@ -296,6 +297,44 @@
 
 - 남은 항목: 실제 기기에서 반응형 배치·글자 넘침·포커스·스크린리더·오디오 조작을 확인하지 않음. 시안 전체 기능 구현이나 UX-01/02 완료를 의미하지 않음.
 - 다음 작업: 사용자 테스트 재개 요청 시 디자인·오디오 동작을 브라우저에서 확인하고, 이후 단일 트랙 PCM 녹음의 실제 수직 기능을 연결.
+
+### 2026-09-21 — Stitch 원본 구조 재적용 / UX-01·UX-02 보완
+
+- 사용자 지적: 이전 적용은 색상·패널 분위기와 단일 빈 트랙만 반영했고, Stitch 원본의 전체 작업 화면 구조와 달랐음. 이를 동일한 디자인 적용으로 설명한 것은 부정확했음.
+- 변경 파일: `src/app/{page.tsx,globals.css}`, `src/components/studio/studio-workspace.tsx`, `src/components/audio/{audio-setup,transport-controls,metronome-controls}.tsx`, `src/lib/i18n/ko.ts`, `tests/e2e/home.spec.ts`, `docs/PROGRESS.md`.
+- 구현: Stitch Desktop Studio Console의 헤더·트랜스포트·라이브러리·4×2 트랙 카드·오른쪽 인스펙터·하단 믹서, Mobile Main Studio의 세로 트랙 카드·하단 탐색 구조를 반영함. 기존 AudioWorklet 시계·메트로놈·오디오 시작을 상단 콘솔에, 실제 마이크 설정·환경 진단을 인스펙터에 유지함. Radix Themes 버튼·카드·배지·스위치·슬라이더·입력 컴포넌트를 사용함.
+- 기능 경계: 8개 카드와 믹서 레일은 레이아웃 슬롯이며 오디오 데이터나 가짜 파형·가짜 레벨을 표시하지 않음. 트랙 녹음, 오버더빙, 샘플 가져오기, 프로젝트 생성, 믹서·FX·장면은 이유가 연결된 비활성 상태로 둠. 모바일에서는 01~04와 08 빈 슬롯만 노출하고 나머지 뱅크는 준비 중으로 표기함.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | Worklet 생성 및 정적 /·/_not-found 빌드 성공 |
+| npx react-doctor@latest --verbose --scope changed / git diff --check | 16개 파일 스캔, 100/100, 진단 없음 / 공백 오류 없음 |
+| npm run test / npm run test:e2e / 브라우저 시각 비교 | 사용자 요청에 따라 실행하지 않음. 변경된 화면 제목의 E2E 기대값만 갱신 |
+
+- 남은 항목: 브라우저에서 실제 렌더링과 Stitch 이미지의 시각적 일치, 모바일 넘침·포커스·실제 오디오 동작은 확인하지 않음. 완성형 8트랙 UI는 실제 오디오 기능과 구분해야 함.
+- 다음 작업: 사용자 테스트 재개 시 데스크톱·모바일 화면을 실제로 비교해 간격·타입·배치를 조정하고, 오디오 동작을 검증함.
+
+### 2026-09-21 — 스튜디오 가독성과 UI 일관성 / UX-01·UX-02 보완
+
+- 변경 파일: `src/app/{layout.tsx,page.tsx,globals.css}`, `src/app/fonts/PretendardVariable.woff2`, `public/fonts/pretendard-OFL.txt`, `src/components/studio/{studio-workspace,studio-navigation}.tsx`, `src/components/ui/studio-icon.tsx`, `src/components/audio/{audio-setup,transport-controls,metronome-controls,microphone-setup}.tsx`, `src/lib/i18n/ko.ts`, `tests/e2e/home.spec.ts`, `docs/PROGRESS.md`. 이전 미커밋 Stitch 수정 위에 이어 작업함.
+- 시각 기준: 기존 27px 조작부와 10px 안팎의 읽기용 텍스트를 정리함. 일반 버튼·입력·메뉴는 최소 44px, 오디오 시작·박자 시작·트랙 주요 버튼은 56px로 맞춤. 한국어·영문 본문은 Pretendard, 박자 숫자만 고정폭으로 표시함. 아이콘은 24×24 뷰박스·동일 선 굵기의 자체 SVG로 통일하고, 패널·버튼·빈 상태의 대비와 여백·모서리 값을 공유함.
+- 동선: 오디오 시작을 첫 조작 영역으로 이동하고, 박자·메트로놈을 다음 순서에 배치함. 실제 작업을 수행하지 않는 상단·하단 메뉴와 뱅크 표시를 없애고, 데스크톱·모바일 공통 메뉴를 `#tracks`, `#library`, `#mixer`, `#settings`로 연결함. 앵커 대상은 포커스 가능하며, 좁은 화면에서도 라이브러리·설정·8트랙을 숨기지 않음. 모바일 하단 메뉴는 safe area를 반영하고, 부드러운 이동·상태 전환은 reduced-motion 설정에서 사용하지 않음.
+- 폰트 출처: [Pretendard 공식 저장소](https://github.com/orioncactus/pretendard), [v1.3.9](https://github.com/orioncactus/pretendard/releases/tag/v1.3.9). 공식 태그의 `packages/pretendard/dist/web/variable/woff2/PretendardVariable.woff2`와 LICENSE를 직접 내려받음. 앱 자체에서 폰트를 제공하므로 실행 중 외부 폰트 CDN 요청은 없고, 빌드에도 추가 다운로드가 필요하지 않음. 최초 폰트 다운로드는 약 2MB이며 실제 로딩 체감·전환은 브라우저에서 미검증.
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | next typegen 및 tsc --noEmit 성공 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | 로컬 가변 폰트 처리, Worklet 생성 및 정적 페이지 빌드 성공 |
+| npx react-doctor@latest --verbose --scope changed | 변경 범위 16개 파일, 100/100, 진단 없음 |
+| npx react-doctor@latest --verbose | 신규 미추적 컴포넌트를 포함한 전체 26개 파일, 100/100, 진단 없음 |
+| git diff --check | 공백 오류 없음 |
+| npm run test / npm run test:e2e / 브라우저 시각·상호작용 검사 | 사용자 요청에 따라 미실행. 한국어 세션 제목의 기존 E2E 기대값만 변경 |
+
+- 남은 항목: 코드·정적 검사 결과이며 실제 렌더링의 가독성, 확대·반응형 넘침, 메뉴 포커스 이동, 폰트 로딩, 터치·스크린리더·오디오 동작은 확인하지 않음. 실제 녹음·믹서·이펙트를 구현한 것으로 표시하지 않음. 브랜치 생성·커밋·푸시는 수행하지 않음.
+- 다음 작업: 사용자 테스트 재개 요청 시 데스크톱·모바일·확대 화면에서 새 크기·메뉴·폰트와 오디오 조작을 검증.
 
 ## 알려진 제한과 차단 항목
 
