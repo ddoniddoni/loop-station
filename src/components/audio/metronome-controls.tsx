@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Heading, Slider, Switch, Text } from "@radix-ui/themes";
+import { Button, Heading, Popover, Slider, Switch, Text } from "@radix-ui/themes";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
 
@@ -14,26 +14,24 @@ type MetronomeControlsProps = {
 
 export function MetronomeControls({ audioReady, enabled, volume, onEnabledChange, onVolumeChange }: MetronomeControlsProps) {
   const ready = audioReady && enabled !== null;
-
   return (
-    <section aria-labelledby="metronome-title" className="station-metronome">
-      <div className="station-metro-heading">
-        <Heading as="h2" id="metronome-title" size="3">{ko.metronomeTitle}</Heading>
-        <Badge variant="soft" color={enabled ? "jade" : "gray"}>{enabled ? ko.microphoneSettingOn : ko.microphoneSettingOff}</Badge>
-      </div>
-      <div className="station-metro-switch">
-        <Switch id="metronome-enabled" size="3" checked={enabled ?? false} disabled={!ready} onCheckedChange={onEnabledChange} />
-        <label htmlFor="metronome-enabled"><Text as="span" size="2">{ko.metronomeEnabled}</Text></label>
-      </div>
-      <div className="station-metro-volume">
-        <Text as="p" id="metronome-volume-label" size="2">{ko.metronomeVolume}<span>{volume}%</span></Text>
+    <Popover.Root>
+      <Popover.Trigger>
+        <Button type="button" className="station-metronome-trigger" variant="outline" color="gray" data-active={enabled === true} aria-label={`메트로놈 설정: ${enabled ? ko.microphoneSettingOn : ko.microphoneSettingOff}`}>
+          <StudioIcon name="clock" size={16} /><span>METRO<small>{enabled ? "ON" : "OFF"}</small></span>
+        </Button>
+      </Popover.Trigger>
+      <Popover.Content className="station-overlay" width="280" sideOffset={8}>
+        <Heading as="h2" size="3">{ko.metronomeTitle}</Heading>
+        <div className="station-metro-switch">
+          <Switch id="metronome-enabled" checked={enabled ?? false} disabled={!ready} onCheckedChange={onEnabledChange} />
+          <label htmlFor="metronome-enabled">{ko.metronomeEnabled}</label>
+        </div>
+        <Text as="p" id="metronome-volume-label" size="2">{ko.metronomeVolume} · {volume}%</Text>
         <Slider aria-labelledby="metronome-volume-label" min={0} max={100} step={1} value={[volume]}
           disabled={!ready} onValueChange={(values) => onVolumeChange(values[0] ?? 0)} />
-      </div>
-      <details className="station-help">
-        <summary><StudioIcon name="info" size={16} />{ko.metronomeHelp}</summary>
-        <Text as="p" size="2" color="gray">{ready ? ko.metronomeBehavior : ko.transportNeedsAudio}</Text>
-      </details>
-    </section>
+        <Text as="p" size="2" color="gray" mt="2">{ready ? ko.metronomeBehavior : ko.transportNeedsAudio}</Text>
+      </Popover.Content>
+    </Popover.Root>
   );
 }

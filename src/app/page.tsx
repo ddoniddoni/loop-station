@@ -1,5 +1,6 @@
-import { Badge, Heading, Text } from "@radix-ui/themes";
+import { Heading, Text } from "@radix-ui/themes";
 import { AudioSetup } from "@/components/audio/audio-setup";
+import { AudioEngineProvider } from "@/components/audio/audio-engine-provider";
 import { StudioWorkspace } from "@/components/studio/studio-workspace";
 import { StudioNavigation } from "@/components/studio/studio-navigation";
 import { StudioIcon } from "@/components/ui/studio-icon";
@@ -7,40 +8,20 @@ import { ko } from "@/lib/i18n/ko";
 
 export default function Home() {
   return (
-    <div className="station-app">
-      <a className="skip-link" href="#main">{ko.skipToContent}</a>
-
-      <header className="station-header">
-        <div className="station-identity">
-          <span className="station-logo"><StudioIcon name="wave" size={26} /></span>
-          <Text as="span" className="station-wordmark">Loop<span>Station</span></Text>
-          <Badge color="gray" variant="soft">{ko.studioPreview}</Badge>
-        </div>
-        <StudioNavigation placement="header" />
-        <div className="station-session">
-          <Heading as="h1" size="4">{ko.studioSessionName}</Heading>
-          <div className="station-session-meta">
-            <span className="station-led is-unsaved" aria-hidden="true" />
-            <Text as="span" size="1">{ko.studioUnsaved}</Text>
-          </div>
-        </div>
-      </header>
-
-      <main id="main" className="station-main" tabIndex={-1}>
-        <div className="station-availability">
-          <StudioIcon name="info" size={18} />
-          <p id="availability">{ko.availability}</p>
-        </div>
-        <section className="station-transport-rack" aria-label={ko.studioControlTitle}>
+    <AudioEngineProvider>
+      <div className="station-app">
+        <a className="skip-link" href="#main">{ko.skipToContent}</a>
+        <header className="station-header">
+          <div className="station-identity"><StudioIcon name="wave" size={24} /><Text as="span" className="station-wordmark">LOOP//STATION</Text><span className="station-edition">WEB</span></div>
+          <StudioNavigation />
+          <div className="station-session"><Heading as="h1" size="3">{ko.studioSessionName}</Heading><span>저장되지 않음 · LOCAL</span></div>
           <AudioSetup />
-        </section>
-        <StudioWorkspace />
-      </main>
-
-      <footer className="station-footer">
-        <Text as="span" size="1">{ko.localFirst}</Text>
-        <Text as="span" size="1">{ko.privacy}</Text>
-      </footer>
-    </div>
+        </header>
+        <main id="main" className="station-main" tabIndex={-1}>
+          <details className="station-availability"><summary><StudioIcon name="info" size={13} /><span>프리뷰 · 녹음 기능 준비 중</span><span>사용 가능 기능 안내</span></summary><p id="availability">{ko.availability}</p><p>{ko.privacy}</p></details>
+          <StudioWorkspace />
+        </main>
+      </div>
+    </AudioEngineProvider>
   );
 }

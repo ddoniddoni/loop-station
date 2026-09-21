@@ -1,4 +1,5 @@
 import { ClickVoice } from "../metronome/click-voice";
+import { InputLevelMeter } from "../input/input-meter";
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { PPQ } from "../transport/timing";
 
@@ -22,6 +23,10 @@ class TestToneProcessor extends AudioWorkletProcessor {
   private metronomeDirty = true;
   private transportDirty = true;
   private framesSinceSnapshot = 0;
+  private readonly inputMeter = new InputLevelMeter();
+  private inputRevision = 0;
+  private inputActive = false;
+  private inputFramesSinceSnapshot = 0;
   private readonly phaseStep = (2 * Math.PI * 440) / sampleRate;
   private readonly envelopeStep = 1 / (sampleRate * 0.01);
 
@@ -52,13 +57,22 @@ class TestToneProcessor extends AudioWorkletProcessor {
       } else if (data.type === "metronome-enable" && "enabled" in data && typeof data.enabled === "boolean") {
         this.metronomeEnabled = data.enabled;
         this.metronomeDirty = true;
+      } else if (data.type === "input-route" && "revision" in data && typeof data.revision === "number" && Number.isSafeInteger(data.revision) && "active" in data && typeof data.active === "boolean") {
+        this.inputRevision = data.revision;
+        this.inputActive = data.active;
+        this.inputFramesSinceSnapshot = 0;
+        this.inputMeter.reset();
+      } else if (data.type === "input-clear-clip" && "revision" in data && data.revision === this.inputRevision) {
+        this.inputMeter.clearClip();
       }
     };
   }
 
-  process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
+  process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
     const channels = outputs[0];
     const clickChannels = outputs[1];
+    const input = this.inputActive ? inputs[0]?.[0] : undefined;
+    const monitor = outputs[2]?.[0];
     const frameCount = channels?.[0]?.length ?? 0;
     const blockPositionFrame = this.clock.positionFrame;
     let nextBeatFrame = Number.POSITIVE_INFINITY;
@@ -76,6 +90,11 @@ class TestToneProcessor extends AudioWorkletProcessor {
     }
 
     for (let frame = 0; frame < frameCount; frame += 1) {
+      const inputSample = input?.[frame];
+      const sample = inputSample !== undefined && Number.isFinite(inputSample) ? inputSample : 0;
+      if (inputSample !== undefined) this.inputMeter.add(sample);
+      // A bounded monitor copy only; future recording uses the unclamped input.
+      if (monitor && frame < monitor.length) monitor[frame] = Math.max(-1, Math.min(1, sample));
       if (blockPositionFrame + frame === nextBeatFrame) {
         this.click.trigger(nextBeatIndex % this.clock.meter.numerator === 0);
         nextBeatIndex += 1;
@@ -102,6 +121,13 @@ class TestToneProcessor extends AudioWorkletProcessor {
     }
 
     this.clock.advance(frameCount);
+    if (this.inputActive) {
+      this.inputFramesSinceSnapshot += frameCount;
+      if (this.inputFramesSinceSnapshot >= sampleRate / 10) {
+        this.port.postMessage(this.inputMeter.snapshot(this.inputRevision));
+        this.inputFramesSinceSnapshot = 0;
+      }
+    }
     this.framesSinceSnapshot = this.clock.playing ? this.framesSinceSnapshot + frameCount : 0;
     if (this.transportDirty || this.framesSinceSnapshot >= sampleRate / 10) {
       this.port.postMessage(this.clock.snapshot(currentFrame + frameCount));

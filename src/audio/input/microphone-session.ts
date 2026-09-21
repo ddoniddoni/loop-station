@@ -91,6 +91,10 @@ export class MicrophoneSession {
     return this.track?.readyState === "live";
   }
 
+  get activeStream(): MediaStream | null {
+    return this.active ? this.stream : null;
+  }
+
   async request(deviceId?: string): Promise<MicrophoneInfo> {
     this.assertActive();
     const version = ++this.requestVersion;

@@ -1,16 +1,12 @@
 "use client";
 
 import { Button, Flex, Heading, Select, Text } from "@radix-ui/themes";
-import { useEffect, useRef, useState } from "react";
-import {
-  MicrophoneError,
-  MicrophoneSession,
-  type MicrophoneDevice,
-  type MicrophoneInfo,
-} from "@/audio/input/microphone-session";
+import { useSyncExternalStore } from "react";
+import type { MicrophoneDevice, MicrophoneInfo } from "@/audio/input/microphone-session";
+import type { MicrophonePhase } from "@/audio/input/microphone-controller";
+import { useMicrophoneController } from "@/components/audio/audio-engine-provider";
+import { MicrophoneInputControls } from "@/components/audio/microphone-input-controls";
 import { ko } from "@/lib/i18n/ko";
-
-type MicrophonePhase = "idle" | "requesting" | "switching" | "active" | "error" | "disconnected" | "unavailable";
 
 const phaseStatus: Record<MicrophonePhase, string> = {
   idle: ko.microphoneIdle,
@@ -116,88 +112,12 @@ function MicrophoneDetails({ phase, info, devices, listUnavailable, onSelect }: 
 }
 
 export function MicrophoneSetup() {
-  const sessionRef = useRef<MicrophoneSession | null>(null);
-  const [phase, setPhase] = useState<MicrophonePhase>("idle");
-  const [info, setInfo] = useState<MicrophoneInfo | null>(null);
-  const [devices, setDevices] = useState<MicrophoneDevice[]>([]);
-  const [issue, setIssue] = useState<string | null>(null);
-  const [listUnavailable, setListUnavailable] = useState(false);
-
-  useEffect(() => () => {
-    sessionRef.current?.dispose();
-    sessionRef.current = null;
-  }, []);
-
-  function getSession(): MicrophoneSession | null {
-    if (sessionRef.current) return sessionRef.current;
-
-    let session: MicrophoneSession;
-    try {
-      session = new MicrophoneSession({
-        onDisconnected: () => {
-          if (sessionRef.current !== session) return;
-          session.cancelPending();
-          setInfo(null);
-          setDevices([]);
-          setPhase("disconnected");
-          setIssue(null);
-        },
-        onDevicesChanged: (available) => {
-          if (sessionRef.current !== session) return;
-          setDevices(available);
-          setListUnavailable(false);
-        },
-        onDeviceListError: () => {
-          if (sessionRef.current !== session) return;
-          setDevices([]);
-          setListUnavailable(true);
-        },
-      });
-    } catch (error) {
-      setPhase(isUnavailable(error) ? "unavailable" : "error");
-      setIssue(microphoneErrorMessage(error));
-      return null;
-    }
-
-    sessionRef.current = session;
-    return session;
-  }
-
-  async function requestMicrophone(deviceId?: string): Promise<void> {
-    const session = getSession();
-    if (!session) return;
-    const wasActive = session.active;
-    setPhase(wasActive ? "switching" : "requesting");
-    setIssue(null);
-
-    try {
-      const nextInfo = await session.request(deviceId);
-      if (sessionRef.current !== session) return;
-      setInfo(nextInfo);
-      setPhase("active");
-    } catch (error) {
-      if (sessionRef.current !== session || isCancelled(error)) return;
-      setPhase(session.active ? "active" : "error");
-      setIssue(microphoneErrorMessage(error));
-    }
-  }
-
-  function cancelRequest(): void {
-    const session = sessionRef.current;
-    const wasActive = session?.active ?? false;
-    session?.cancelPending();
-    setPhase(wasActive ? "active" : "idle");
-    setIssue(wasActive ? null : ko.microphoneCancelled);
-  }
-
-  function releaseMicrophone(): void {
-    sessionRef.current?.release();
-    setInfo(null);
-    setDevices([]);
-    setListUnavailable(false);
-    setIssue(null);
-    setPhase("idle");
-  }
+  const controller = useMicrophoneController();
+  const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getServerSnapshot);
+  const { phase, info, devices, listUnavailable } = snapshot;
+  const issue = snapshot.issue === "routing-failed"
+    ? ko.inputRoutingFailed
+    : snapshot.issue ? ko.microphoneErrors[snapshot.issue] : null;
 
   return (
     <section aria-labelledby="microphone-title" className="studio-side-content">
@@ -205,32 +125,21 @@ export function MicrophoneSetup() {
       <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.microphoneDescription}</Text>
       <MicrophoneControls
         phase={phase}
-        onRequest={() => void requestMicrophone()}
-        onCancel={cancelRequest}
-        onRelease={releaseMicrophone}
+        onRequest={() => void controller.request()}
+        onCancel={() => controller.cancelRequest()}
+        onRelease={() => controller.release()}
       />
       <Text as="p" role={issue || phase === "disconnected" ? "alert" : "status"} size="2" color={issue ? "red" : "gray"} mt="3">
         {issue ?? phaseStatus[phase]}
       </Text>
+      <MicrophoneInputControls controller={controller} snapshot={snapshot} />
       <MicrophoneDetails
         phase={phase}
         info={info}
         devices={devices}
         listUnavailable={listUnavailable}
-        onSelect={(id) => void requestMicrophone(id)}
+        onSelect={(id) => void controller.request(id)}
       />
     </section>
   );
-}
-
-function isCancelled(error: unknown): boolean {
-  return error instanceof MicrophoneError && error.code === "cancelled";
-}
-
-function isUnavailable(error: unknown): boolean {
-  return error instanceof MicrophoneError && (error.code === "insecure-context" || error.code === "unsupported");
-}
-
-function microphoneErrorMessage(error: unknown): string {
-  return error instanceof MicrophoneError ? ko.microphoneErrors[error.code] : ko.microphoneErrors.unknown;
 }

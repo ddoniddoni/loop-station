@@ -1,227 +1,72 @@
 "use client";
 
-import { Button, Flex, Heading, Text } from "@radix-ui/themes";
-import { useEffect, useRef, useState } from "react";
-import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine";
-import type { TransportSnapshot } from "@/audio/transport/audio-frame-clock";
+import { Button, Flex, Heading, Popover, Text } from "@radix-ui/themes";
+import { useAudioSessionContext } from "@/components/audio/audio-engine-provider";
+import type { AudioPhase } from "@/components/audio/use-audio-session";
 import { MetronomeControls } from "@/components/audio/metronome-controls";
 import { TransportControls } from "@/components/audio/transport-controls";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
 
-type AudioPhase = "idle" | "starting" | "ready" | "playing" | "suspended" | "stopping" | "error";
-
 const phaseStatus: Record<AudioPhase, string> = {
-  idle: ko.audioIdle,
-  starting: ko.audioStarting,
-  ready: ko.audioReady,
-  playing: ko.audioPlaying,
-  suspended: ko.audioSuspended,
-  stopping: ko.audioStopping,
+  idle: ko.audioIdle, starting: ko.audioStarting, ready: ko.audioReady,
+  playing: ko.audioPlaying, suspended: ko.audioSuspended, stopping: ko.audioStopping,
   error: ko.audioErrors.startFailed,
 };
 
-type AudioControlsProps = {
-  phase: AudioPhase;
-  onStart: () => void;
-  onStop: () => void;
-  onResume: () => void;
-  onToneStart: () => void;
-  onToneStop: () => void;
-};
+function AudioPrimaryAction() {
+  const audio = useAudioSessionContext();
+  switch (audio.phase) {
+    case "idle":
+    case "error":
+      return <Button onClick={() => void audio.startAudio()}><StudioIcon name="power" />{audio.phase === "error" ? ko.audioRetry : ko.audioStart}</Button>;
+    case "ready": return <Button onClick={audio.startTone}>{ko.toneStart}</Button>;
+    case "playing": return <Button variant="soft" onClick={audio.stopTone}>{ko.toneStop}</Button>;
+    case "suspended": return <Button onClick={() => void audio.resumeAudio()}>{ko.audioResume}</Button>;
+    default: return null;
+  }
+}
 
-function AudioControls({ phase, onStart, onStop, onResume, onToneStart, onToneStop }: AudioControlsProps) {
+function AudioPowerActions() {
+  const audio = useAudioSessionContext();
+  const canStop = audio.phase !== "idle" && audio.phase !== "error";
+  return <Flex gap="2" wrap="wrap" mt="4"><AudioPrimaryAction />{canStop && <Button variant="outline" color="gray" disabled={audio.phase === "stopping"} onClick={() => void audio.stopAudio()}>{audio.phase === "starting" ? ko.audioCancel : ko.audioEnd}</Button>}</Flex>;
+}
+
+function AudioPower() {
+  const audio = useAudioSessionContext();
+  const { phase, sampleRate, issue } = audio;
   return (
-    <Flex gap="2" wrap="wrap" className="station-audio-actions">
-      {(phase === "idle" || phase === "error") && (
-        <Button type="button" onClick={onStart}><StudioIcon name="power" />{phase === "error" ? ko.audioRetry : ko.audioStart}</Button>
-      )}
-      {phase === "ready" && (
-        <Button type="button" onClick={onToneStart}>{ko.toneStart}</Button>
-      )}
-      {phase === "playing" && (
-        <Button type="button" variant="soft" onClick={onToneStop}>{ko.toneStop}</Button>
-      )}
-      {phase === "suspended" && (
-        <Button type="button" onClick={onResume}>{ko.audioResume}</Button>
-      )}
-      {phase !== "idle" && phase !== "error" && (
-        <Button type="button" variant="outline" color="gray" disabled={phase === "stopping"} onClick={onStop}>
-          {phase === "starting" ? ko.audioCancel : ko.audioEnd}
+    <Popover.Root>
+      <Popover.Trigger>
+        <Button type="button" variant="outline" color="gray" className="station-power" aria-label="오디오 연결 설정" data-ready={phase === "ready" || phase === "playing"}>
+          <StudioIcon name="power" size={16} />
+          <span>{sampleRate ? `${sampleRate / 1000}kHz` : "AUDIO"}<small>{phase === "ready" || phase === "playing" ? "ON" : phase === "idle" ? "OFF" : "설정"}</small></span>
         </Button>
-      )}
-    </Flex>
+      </Popover.Trigger>
+      <Popover.Content className="station-overlay station-audio-popover" width="320" sideOffset={8}>
+        <Heading as="h2" size="3">{ko.audioPanelTitle}</Heading>
+        <Text as="p" size="2" color="gray" mt="2">{ko.audioPanelDescription}</Text>
+        <AudioPowerActions />
+        <Text as="p" size="2" mt="3" role={issue ? "alert" : "status"} color={issue ? "red" : "gray"}>{issue ?? phaseStatus[phase]}</Text>
+      </Popover.Content>
+    </Popover.Root>
   );
 }
 
-function release(engine: TestToneEngine): void {
-  void engine.dispose().catch(() => undefined);
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof AudioSetupError ? ko.audioErrors[error.code] : fallback;
-}
-
 export function AudioSetup() {
-  const engineRef = useRef<TestToneEngine | null>(null);
-  const [phase, setPhase] = useState<AudioPhase>("idle");
-  const [sampleRate, setSampleRate] = useState<number | null>(null);
-  const [transport, setTransport] = useState<TransportSnapshot | null>(null);
-  const [metronomeEnabled, setMetronomeEnabled] = useState<boolean | null>(null);
-  const [metronomeVolume, setMetronomeVolume] = useState(50);
-  const [issue, setIssue] = useState<string | null>(null);
-
-  useEffect(() => () => {
-    const engine = engineRef.current;
-    engineRef.current = null;
-    if (engine) release(engine);
-  }, []);
-
-  async function startAudio(): Promise<void> {
-    if (engineRef.current) return;
-    setIssue(null);
-    setPhase("starting");
-    setTransport(null);
-    setMetronomeEnabled(null);
-    setMetronomeVolume(50);
-
-    let engine: TestToneEngine;
-    try {
-      engine = new TestToneEngine({
-        onContextStateChange: (state) => {
-          if (engineRef.current !== engine) return;
-          if (state === "running") {
-            setPhase((current) => engine.isReady ? (current === "playing" ? current : "ready") : "starting");
-          } else if (state === "closed") {
-            engineRef.current = null;
-            release(engine);
-            setSampleRate(null);
-            setTransport(null);
-            setMetronomeEnabled(null);
-            setPhase("error");
-            setIssue(ko.audioErrors.closed);
-          } else {
-            setPhase("suspended");
-          }
-        },
-        onToneStateChange: (playing) => {
-          if (engineRef.current === engine && engine.state === "running") {
-            setPhase(playing ? "playing" : "ready");
-          }
-        },
-        onTransportStateChange: (snapshot) => {
-          if (engineRef.current === engine) setTransport(snapshot);
-        },
-        onMetronomeStateChange: (enabled) => {
-          if (engineRef.current === engine) setMetronomeEnabled(enabled);
-        },
-        onProcessorError: () => {
-          if (engineRef.current !== engine) return;
-          engineRef.current = null;
-          release(engine);
-          setSampleRate(null);
-          setTransport(null);
-          setMetronomeEnabled(null);
-          setPhase("error");
-          setIssue(ko.audioErrors.processorFailed);
-        },
-      });
-    } catch (error) {
-      setPhase("error");
-      setIssue(errorMessage(error, ko.audioErrors.startFailed));
-      return;
-    }
-
-    engineRef.current = engine;
-    try {
-      await engine.initialize();
-      if (engineRef.current !== engine) return;
-      setSampleRate(engine.sampleRate);
-      setPhase(engine.state === "running" ? "ready" : "suspended");
-    } catch (error) {
-      if (engineRef.current !== engine) return;
-      await engine.dispose().catch(() => undefined);
-      engineRef.current = null;
-      setSampleRate(null);
-      setTransport(null);
-      setMetronomeEnabled(null);
-      setPhase("error");
-      setIssue(errorMessage(error, ko.audioErrors.startFailed));
-    }
-  }
-
-  async function stopAudio(): Promise<void> {
-    const engine = engineRef.current;
-    if (!engine) return;
-    engineRef.current = null;
-    setPhase("stopping");
-    setTransport(null);
-    setMetronomeEnabled(null);
-    try {
-      await engine.dispose();
-      setPhase("idle");
-      setIssue(null);
-    } catch {
-      setPhase("error");
-      setIssue(ko.audioErrors.closeFailed);
-    } finally {
-      setSampleRate(null);
-    }
-  }
-
-  async function resumeAudio(): Promise<void> {
-    const engine = engineRef.current;
-    if (!engine) return;
-    setPhase("starting");
-    setIssue(null);
-    try {
-      await engine.resume();
-      if (engineRef.current === engine) setPhase("ready");
-    } catch (error) {
-      if (engineRef.current !== engine) return;
-      setPhase("suspended");
-      setIssue(errorMessage(error, ko.audioErrors.resumeFailed));
-    }
-  }
-
-  const status = issue ?? phaseStatus[phase];
-
+  const audio = useAudioSessionContext();
+  const ready = audio.phase === "ready" || audio.phase === "playing";
   return (
-    <div className="station-audio-console">
-      <section className="station-audio-power" aria-labelledby="audio-title">
-        <Heading as="h2" id="audio-title" size="3">{ko.audioPanelTitle}</Heading>
-        <Text as="p" size="2" color="gray">{ko.audioPanelDescription}</Text>
-        <AudioControls
-          phase={phase}
-          onStart={() => void startAudio()}
-          onStop={() => void stopAudio()}
-          onResume={() => void resumeAudio()}
-          onToneStart={() => engineRef.current?.startTone()}
-          onToneStop={() => engineRef.current?.stopTone()}
-        />
-        <Text as="p" role={phase === "error" ? "alert" : "status"} size="2" color={issue ? "red" : "gray"} className="station-engine-status">
-          {status}
-          {sampleRate !== null && phase !== "error" && <> · {sampleRate / 1000} kHz</>}
-        </Text>
-      </section>
-      <TransportControls
-        enabled={phase === "ready" || phase === "playing"}
-        snapshot={transport}
-        onStart={() => engineRef.current?.startTransport()}
-        onStop={() => engineRef.current?.stopTransport()}
-        onReset={() => engineRef.current?.resetTransport()}
-        onConfigure={(config) => engineRef.current?.configureTransport(config)}
-      />
-      <MetronomeControls
-        audioReady={phase === "ready" || phase === "playing"}
-        enabled={metronomeEnabled}
-        volume={metronomeVolume}
-        onEnabledChange={(enabled) => engineRef.current?.setMetronomeEnabled(enabled)}
-        onVolumeChange={(volume) => {
-          engineRef.current?.setMetronomeVolume(volume);
-          setMetronomeVolume(volume);
-        }}
-      />
+    <div className="station-audio-console" aria-label={ko.studioControlTitle}>
+      <TransportControls enabled={ready} snapshot={audio.transport} onStart={audio.startTransport}
+        onStop={audio.stopTransport} onReset={audio.resetTransport} onConfigure={audio.configureTransport} />
+      <MetronomeControls audioReady={ready} enabled={audio.metronomeEnabled} volume={audio.metronomeVolume}
+        onEnabledChange={audio.setMetronomeEnabled} onVolumeChange={audio.setMetronomeVolume} />
+      <AudioPower />
+      <Button type="button" className="station-panic" variant="outline" color="red" disabled={audio.phase === "idle" || audio.phase === "error" || audio.phase === "stopping"}
+        aria-label="모든 오디오 종료 (PANIC)" onClick={() => void audio.stopAudio()}><StudioIcon name="stop" size={14} /><span>PANIC</span></Button>
+      {audio.issue && <Text as="p" size="1" role="alert" className="station-audio-issue">{audio.issue}</Text>}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { isTransportSnapshot, type TransportConfig, type TransportSnapshot } from "../transport/audio-frame-clock";
+import type { MicrophoneController } from "../input/microphone-controller";
 
 type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
@@ -33,10 +34,11 @@ export class TestToneEngine {
   private readonly handleContextStateChange = () => {
     if (this.disposed) return;
     if (this.context.state !== "running") this.stopTone();
+    this.input.setAudioRunning(this.context.state === "running");
     this.callbacks.onContextStateChange(this.context.state);
   };
 
-  constructor(private readonly callbacks: EngineCallbacks) {
+  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController) {
     if (!window.isSecureContext) {
       throw new AudioSetupError("insecure-context");
     }
@@ -76,13 +78,16 @@ export class TestToneEngine {
     this.assertActive();
 
     const node = new AudioWorkletNode(this.context, "loop-station-test-tone", {
-      numberOfInputs: 0,
-      numberOfOutputs: 2,
-      outputChannelCount: [1, 1],
+      numberOfInputs: 1,
+      numberOfOutputs: 3,
+      outputChannelCount: [1, 1, 1],
+      channelCount: 1,
+      channelCountMode: "explicit",
     });
     node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.disposed) return;
       const data = event.data;
+      this.input.acceptMeter(data);
       if (isTransportSnapshot(data)) {
         this.callbacks.onTransportStateChange(data);
         return;
@@ -94,7 +99,10 @@ export class TestToneEngine {
         this.callbacks.onMetronomeStateChange(data.enabled);
       }
     };
-    node.onprocessorerror = () => this.callbacks.onProcessorError();
+    node.onprocessorerror = () => {
+      this.input.setAudioRunning(false);
+      this.callbacks.onProcessorError();
+    };
 
     const toneGain = this.context.createGain();
     toneGain.gain.value = 0.15;
@@ -107,6 +115,7 @@ export class TestToneEngine {
     node.connect(clickGain, 1);
     toneGain.connect(this.context.destination);
     clickGain.connect(this.context.destination);
+    this.input.attachAudio(this.context, node);
     this.context.addEventListener("statechange", this.handleContextStateChange);
   }
 
@@ -117,6 +126,7 @@ export class TestToneEngine {
     if (this.context.state !== "running") {
       throw new AudioSetupError("not-running");
     }
+    this.input.setAudioRunning(true);
     this.callbacks.onContextStateChange("running");
   }
 
@@ -165,6 +175,7 @@ export class TestToneEngine {
     if (this.disposed) return;
     this.disposed = true;
     this.context.removeEventListener("statechange", this.handleContextStateChange);
+    this.input.detachAudio();
     if (this.node) {
       this.node.onprocessorerror = null;
       this.node.port.onmessage = null;

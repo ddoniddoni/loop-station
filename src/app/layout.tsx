@@ -15,6 +15,9 @@ const pretendard = localFont({
   fallback: ["system-ui", "Arial", "sans-serif"],
 });
 
+const geist = localFont({ src: "./fonts/GeistVariable.ttf", variable: "--font-geist", weight: "100 900", display: "swap", preload: false });
+const jetbrains = localFont({ src: "./fonts/JetBrainsMonoVariable.ttf", variable: "--font-jetbrains", weight: "100 800", display: "swap", preload: false });
+
 export const metadata: Metadata = {
   title: ko.appName,
   description: ko.description,
@@ -22,7 +25,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko" className={pretendard.variable}>
+    <html lang="ko" className={`${pretendard.variable} ${geist.variable} ${jetbrains.variable}`}>
       <body>
         <StudioTheme>{children}</StudioTheme>
       </body>
