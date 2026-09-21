@@ -7,7 +7,7 @@ test("production home renders in Korean and clearly marks unavailable audio feat
   await page.goto("/");
   await expect(page).toHaveTitle("Loop Station");
   await expect(page.locator("html")).toHaveAttribute("lang", "ko");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("첫 루프를 준비하고 있어요.");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("제목 없는 세션");
   await expect(page.getByRole("button", { name: "새 프로젝트" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "데모로 체험" })).toBeDisabled();
   await expect(page.getByText("마이크는 직접 허용했을 때만 연결되며, 녹음은 아직 지원하지 않습니다.")).toBeVisible();
