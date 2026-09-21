@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Heading, Select, Text, TextField } from "@radix-ui/themes";
+import { Button, Heading, Popover, Select, Text, TextField } from "@radix-ui/themes";
 import { useState, type FormEvent } from "react";
 import { TRANSPORT_METERS, type TransportConfig, type TransportSnapshot } from "@/audio/transport/audio-frame-clock";
 import { PPQ, ticksPerBar } from "@/audio/transport/timing";
@@ -46,42 +46,43 @@ export function TransportControls({ enabled, snapshot, onStart, onStop, onReset,
   }
 
   return (
-    <section aria-labelledby="transport-title" className="station-transport">
-      <div className="station-control-heading">
-        <Heading as="h2" id="transport-title" size="3">{ko.transportTitle}</Heading>
-        <Badge color={snapshot?.playing ? "jade" : "gray"} variant="soft">{snapshot?.playing ? ko.transportPlaying : ko.transportStopped}</Badge>
+    <section aria-label={ko.transportTitle} className="station-transport">
+      <div className="station-transport-buttons">
+        <Button type="button" className="station-transport-stop" variant="outline" color="gray" disabled={!ready || !snapshot?.playing} onClick={onStop} aria-label={ko.transportStop}><StudioIcon name="stop" size={18} /></Button>
+        <Button type="button" className="station-transport-play" variant="outline" disabled={!ready || snapshot?.playing} onClick={onStart} aria-label={ko.transportPlay} data-playing={snapshot?.playing ?? false}><StudioIcon name="play" size={19} /><span>{snapshot?.playing ? "PLAYING" : "PLAY"}</span></Button>
       </div>
-      <div className="station-transport-main">
-        <div className="station-counter" role="group" aria-label={ko.transportPosition}>
-          <div><span>{ko.studioBar}</span><output aria-live="off" aria-label={`${position.bar} ${ko.studioBar}`}>{position.bar}</output></div>
-          <span className="station-counter-divider" aria-hidden="true">:</span>
-          <div><span>{ko.studioBeat}</span><output aria-live="off" aria-label={`${position.beat} ${ko.studioBeat}`}>{position.beat}</output></div>
-        </div>
-        <div className="station-transport-buttons">
-          <Button type="button" disabled={!ready || snapshot?.playing} onClick={onStart}><StudioIcon name="play" />{ko.transportPlay}</Button>
-          <Button type="button" variant="soft" color="gray" disabled={!ready || !snapshot?.playing} onClick={onStop}><StudioIcon name="stop" />{ko.transportStopShort}</Button>
-          <Button type="button" variant="ghost" color="gray" disabled={!ready || (snapshot?.positionFrame === 0 && !snapshot?.playing)} onClick={onReset} aria-label={ko.transportReset} title={ko.transportReset}><StudioIcon name="undo" /></Button>
-        </div>
+      <div className="station-counter" role="group" aria-label={ko.transportPosition}>
+        <span className="station-counter-caption">TRANSPORT COUNTER</span>
+        <div><span>BAR</span><output aria-live="off" aria-label={`${position.bar} ${ko.studioBar}`}>{position.bar}</output><span className="station-counter-divider" aria-hidden="true">|</span><span>BEAT</span><output aria-live="off" aria-label={`${position.beat} ${ko.studioBeat}`}>{position.beat}</output><i data-playing={snapshot?.playing ?? false} aria-hidden="true" /></div>
       </div>
-      <form onSubmit={applySettings} className="station-tempo-form">
-        <div className="station-tempo-field">
-          <label htmlFor="transport-bpm">{ko.transportTempoLabel}</label>
-          <TextField.Root id="transport-bpm" type="number" min="40" max="240" step="1" inputMode="numeric"
-            value={draftBpm} disabled={!ready} onChange={(event) => setDraftBpm(event.target.value)} />
-        </div>
-        <div className="station-tempo-field">
-          <label htmlFor="transport-meter">{ko.transportMeter}</label>
-          <Select.Root value={draftMeter} disabled={!ready} onValueChange={setDraftMeter}>
-            <Select.Trigger id="transport-meter" aria-label={ko.transportMeter} />
-            <Select.Content position="popper">
-              {TRANSPORT_METERS.map((meter) => <Select.Item key={meter.label} value={meter.label}>{meter.label}</Select.Item>)}
-            </Select.Content>
-          </Select.Root>
-        </div>
-        <Button type="submit" variant="outline" disabled={!ready}>{ko.transportApply}</Button>
-      </form>
-      <Text as="p" size="1" color="gray" className="station-tempo-current">{snapshot ? `${ko.transportCurrentSetting} ${snapshot.bpm} BPM · ${snapshot.numerator}/${snapshot.denominator}` : ko.transportNeedsAudio}</Text>
-      {issue && <Text as="p" role="alert" size="2" color="red" className="station-transport-issue">{issue}</Text>}
+      <Popover.Root>
+        <Popover.Trigger>
+          <Button type="button" variant="outline" color="gray" className="station-tempo-trigger" aria-label="템포와 박자 설정">
+            <span><strong>{snapshot?.bpm.toFixed(1) ?? "120.0"}</strong><small>BPM / {snapshot ? `${snapshot.numerator}/${snapshot.denominator}` : "4/4"}</small></span><StudioIcon name="settings" size={16} />
+          </Button>
+        </Popover.Trigger>
+        <Popover.Content className="station-overlay" width="300" sideOffset={8}>
+          <Heading as="h2" size="3">{ko.transportTitle}</Heading>
+          <form onSubmit={applySettings} className="station-tempo-form">
+            <div className="station-tempo-field">
+              <label htmlFor="transport-bpm">{ko.transportTempoLabel}</label>
+              <TextField.Root id="transport-bpm" type="number" min="40" max="240" step="1" inputMode="numeric"
+                value={draftBpm} disabled={!ready} onChange={(event) => setDraftBpm(event.target.value)} />
+            </div>
+            <div className="station-tempo-field">
+              <label htmlFor="transport-meter">{ko.transportMeter}</label>
+              <Select.Root value={draftMeter} disabled={!ready} onValueChange={setDraftMeter}>
+                <Select.Trigger id="transport-meter" aria-label={ko.transportMeter} />
+                <Select.Content position="popper">{TRANSPORT_METERS.map((meter) => <Select.Item key={meter.label} value={meter.label}>{meter.label}</Select.Item>)}</Select.Content>
+              </Select.Root>
+            </div>
+            <Button type="submit" variant="outline" disabled={!ready}>{ko.transportApply}</Button>
+          </form>
+          <Button type="button" variant="soft" color="gray" mt="3" disabled={!ready || (snapshot?.positionFrame === 0 && !snapshot?.playing)} onClick={onReset}><StudioIcon name="undo" size={16} />{ko.transportReset}</Button>
+          <Text as="p" size="2" color="gray" mt="3">{snapshot ? `${ko.transportCurrentSetting} ${snapshot.bpm} BPM · ${snapshot.numerator}/${snapshot.denominator}` : ko.transportNeedsAudio}</Text>
+          {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
+        </Popover.Content>
+      </Popover.Root>
     </section>
   );
 }
