@@ -17,7 +17,7 @@ test("production home renders in Korean and clearly marks unavailable audio feat
   await expect(page).toHaveURL(/#main$/);
 
   await page.locator(".station-availability > summary").click();
-  await expect(page.getByText("마이크는 직접 허용했을 때만 연결되며, 녹음은 아직 지원하지 않습니다.")).toBeVisible();
+  await expect(page.getByText("마이크 연결과 녹음은 직접 시작해야 동작합니다. 녹음은 이 탭에만 보관되며 새로고침하면 사라집니다.")).toBeVisible();
   const mobileSettings = page.getByRole("button", { name: "Settings", exact: true });
   if (await mobileSettings.isVisible()) {
     await mobileSettings.click();

@@ -1,5 +1,6 @@
 import { ClickVoice } from "../metronome/click-voice";
 import { InputLevelMeter } from "../input/input-meter";
+import { PcmLoop } from "../loop/pcm-loop";
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { PPQ } from "../transport/timing";
 
@@ -16,6 +17,8 @@ declare class AudioWorkletProcessor {
 class TestToneProcessor extends AudioWorkletProcessor {
   private readonly clock = new AudioFrameClock(sampleRate);
   private readonly click = new ClickVoice(sampleRate);
+  private readonly loop = new PcmLoop(this.clock, sampleRate, this.port);
+  private blockFrames = 0;
   private phase = 0;
   private level = 0;
   private enabled = false;
@@ -35,6 +38,8 @@ class TestToneProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (event: MessageEvent<unknown>) => {
       const data = event.data;
       if (typeof data !== "object" || data === null || !("type" in data)) return;
+      this.loop.handle(data, this.blockFrames, this.inputActive);
+      if (typeof data.type === "string" && data.type.startsWith("loop-")) this.transportDirty = true;
 
       if (data.type === "start") {
         this.enabled = true;
@@ -44,20 +49,24 @@ class TestToneProcessor extends AudioWorkletProcessor {
         this.port.postMessage({ type: "stopped" });
       } else if (data.type === "transport-start") {
         this.clock.start();
+        this.loop.play(this.blockFrames);
         this.transportDirty = true;
       } else if (data.type === "transport-stop") {
+        this.loop.stop();
         this.clock.stop();
         this.transportDirty = true;
       } else if (data.type === "transport-reset") {
+        this.loop.stop();
         this.clock.reset();
         this.transportDirty = true;
       } else if (data.type === "transport-configure" && "config" in data && isTransportConfig(data.config)) {
-        this.clock.configure(data.config);
+        if (!this.loop.locked) this.clock.configure(data.config);
         this.transportDirty = true;
       } else if (data.type === "metronome-enable" && "enabled" in data && typeof data.enabled === "boolean") {
         this.metronomeEnabled = data.enabled;
         this.metronomeDirty = true;
       } else if (data.type === "input-route" && "revision" in data && typeof data.revision === "number" && Number.isSafeInteger(data.revision) && "active" in data && typeof data.active === "boolean") {
+        this.loop.interrupt();
         this.inputRevision = data.revision;
         this.inputActive = data.active;
         this.inputFramesSinceSnapshot = 0;
@@ -73,7 +82,9 @@ class TestToneProcessor extends AudioWorkletProcessor {
     const clickChannels = outputs[1];
     const input = this.inputActive ? inputs[0]?.[0] : undefined;
     const monitor = outputs[2]?.[0];
+    const loopOutput = outputs[3]?.[0];
     const frameCount = channels?.[0]?.length ?? 0;
+    this.blockFrames = frameCount;
     const blockPositionFrame = this.clock.positionFrame;
     let nextBeatFrame = Number.POSITIVE_INFINITY;
     let nextBeatIndex = 0;
@@ -92,8 +103,10 @@ class TestToneProcessor extends AudioWorkletProcessor {
     for (let frame = 0; frame < frameCount; frame += 1) {
       const inputSample = input?.[frame];
       const sample = inputSample !== undefined && Number.isFinite(inputSample) ? inputSample : 0;
+      const loopSample = this.loop.nextSample(inputSample, blockPositionFrame + frame);
+      if (loopOutput && frame < loopOutput.length) loopOutput[frame] = loopSample;
       if (inputSample !== undefined) this.inputMeter.add(sample);
-      // A bounded monitor copy only; future recording uses the unclamped input.
+      // Monitor limiting never changes the PCM captured by the loop above.
       if (monitor && frame < monitor.length) monitor[frame] = Math.max(-1, Math.min(1, sample));
       if (blockPositionFrame + frame === nextBeatFrame) {
         this.click.trigger(nextBeatIndex % this.clock.meter.numerator === 0);
@@ -129,7 +142,9 @@ class TestToneProcessor extends AudioWorkletProcessor {
       }
     }
     this.framesSinceSnapshot = this.clock.playing ? this.framesSinceSnapshot + frameCount : 0;
-    if (this.transportDirty || this.framesSinceSnapshot >= sampleRate / 10) {
+    const refresh = this.framesSinceSnapshot >= sampleRate / 10;
+    this.loop.publish(refresh);
+    if (this.transportDirty || refresh) {
       this.port.postMessage(this.clock.snapshot(currentFrame + frameCount));
       this.transportDirty = false;
       this.framesSinceSnapshot = 0;

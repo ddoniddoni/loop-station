@@ -4,6 +4,7 @@ import { Badge, Button, Card, Heading, Text } from "@radix-ui/themes";
 import { useState } from "react";
 import { EnvironmentDiagnostics } from "@/components/audio/environment-diagnostics";
 import { StudioInputPanel } from "@/components/studio/studio-input-panel";
+import { RecordedClipDetails, RecordingTrack } from "@/components/studio/recording-track";
 import { StudioMobileNavigation, type StudioView } from "@/components/studio/studio-navigation";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
@@ -66,7 +67,9 @@ function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: Trac
     <section id="tracks" tabIndex={-1} className="station-track-board" data-bank={bank} aria-labelledby="tracks-title">
       <Heading as="h2" id="tracks-title" className="sr-only">{ko.studioTracksTitle}</Heading>
       <div className="station-bank-switch"><Button variant="outline" color="gray" aria-pressed={bank === 0} onClick={() => onBankChange(0)}>Bank 1–4</Button><Button variant="outline" color="gray" aria-pressed={bank === 1} onClick={() => onBankChange(1)}>Bank 5–8</Button><span>8 TRACKS</span></div>
-      <div className="station-track-grid">{trackSlots.map((slot) => <TrackCard key={slot.number} slot={slot} selected={selected === slot} onSelect={() => onSelect(slot)} />)}</div>
+      <div className="station-track-grid">{trackSlots.map((slot) => slot.number === "01"
+        ? <RecordingTrack key={slot.number} selected={selected === slot} onSelect={() => onSelect(slot)} />
+        : <TrackCard key={slot.number} slot={slot} selected={selected === slot} onSelect={() => onSelect(slot)} />)}</div>
     </section>
   );
 }
@@ -74,12 +77,11 @@ function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: Trac
 function InspectorPanel({ selected }: { selected: TrackSlot }) {
   return (
     <aside id="settings" tabIndex={-1} className="station-inspector" aria-labelledby="inspector-title" data-tone={selected.tone}>
-      <div className="station-inspector-head"><Text as="p" className="station-overline">FOCUSED TRACK</Text><Heading as="h2" id="inspector-title" size="4">Track {selected.number} – {selected.name}</Heading><Badge variant="outline" color="gray">비어 있음</Badge></div>
+      <div className="station-inspector-head"><Text as="p" className="station-overline">FOCUSED TRACK</Text><Heading as="h2" id="inspector-title" size="4">Track {selected.number} – {selected.name}</Heading><Badge variant="outline" color="gray">{selected.number === "01" ? "4마디 녹음 트랙" : "비어 있음"}</Badge></div>
       <section className="station-inspector-section station-clip-settings" aria-labelledby="clip-settings-title">
         <Heading as="h3" id="clip-settings-title" size="2">CLIP SETTINGS</Heading>
-        <div className="station-clip-fields"><div><span>LOOP MODE</span><strong>—</strong></div><div><span>LENGTH</span><strong>—</strong></div></div>
+        {selected.number === "01" ? <RecordedClipDetails /> : <><div className="station-clip-fields"><div><span>LOOP MODE</span><strong>—</strong></div><div><span>LENGTH</span><strong>—</strong></div></div><Text as="p" size="1" color="gray" mt="2">{ko.studioNoClip}</Text></>}
         <div className="station-speed-controls">{["REV", "0.5x", "1x", "2x"].map((label) => <Button key={label} variant="outline" color="gray" disabled aria-describedby="availability">{label}</Button>)}</div>
-        <Text as="p" size="1" color="gray" mt="2">{ko.studioNoClip}</Text>
       </section>
       <StudioInputPanel />
       <section id="fx" tabIndex={-1} className="station-inspector-section station-fx" aria-labelledby="fx-title">
@@ -105,7 +107,7 @@ function MixerConsole({ bank }: { bank: number }) {
 }
 
 export function StudioWorkspace() {
-  const [selected, setSelected] = useState<TrackSlot>(trackSlots[2]);
+  const [selected, setSelected] = useState<TrackSlot>(trackSlots[0]);
   const [bank, setBank] = useState(0);
   const [view, setView] = useState<StudioView>("tracks");
   return (

@@ -18,7 +18,7 @@ export default function Home() {
           <AudioSetup />
         </header>
         <main id="main" className="station-main" tabIndex={-1}>
-          <details className="station-availability"><summary><StudioIcon name="info" size={13} /><span>프리뷰 · 녹음 기능 준비 중</span><span>사용 가능 기능 안내</span></summary><p id="availability">{ko.availability}</p><p>{ko.privacy}</p></details>
+          <details className="station-availability"><summary><StudioIcon name="info" size={13} /><span>프리뷰 · 01 트랙 4마디 녹음</span><span>사용 가능 기능 안내</span></summary><p id="availability">{ko.availability}</p><p>{ko.privacy}</p></details>
           <StudioWorkspace />
         </main>
       </div>

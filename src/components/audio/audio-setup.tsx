@@ -1,7 +1,9 @@
 "use client";
 
 import { Button, Flex, Heading, Popover, Text } from "@radix-ui/themes";
-import { useAudioSessionContext } from "@/components/audio/audio-engine-provider";
+import { useSyncExternalStore } from "react";
+import { useAudioSessionContext, useLoopController } from "@/components/audio/audio-engine-provider";
+import { isCapturePhase } from "@/audio/loop/loop-controller";
 import type { AudioPhase } from "@/components/audio/use-audio-session";
 import { MetronomeControls } from "@/components/audio/metronome-controls";
 import { TransportControls } from "@/components/audio/transport-controls";
@@ -56,10 +58,12 @@ function AudioPower() {
 
 export function AudioSetup() {
   const audio = useAudioSessionContext();
+  const loop = useLoopController();
+  const loopState = useSyncExternalStore(loop.subscribe, loop.getSnapshot, loop.getServerSnapshot);
   const ready = audio.phase === "ready" || audio.phase === "playing";
   return (
     <div className="station-audio-console" aria-label={ko.studioControlTitle}>
-      <TransportControls enabled={ready} snapshot={audio.transport} onStart={audio.startTransport}
+      <TransportControls enabled={ready} settingsLocked={loopState.hasClip || isCapturePhase(loopState.phase)} snapshot={audio.transport} onStart={audio.startTransport}
         onStop={audio.stopTransport} onReset={audio.resetTransport} onConfigure={audio.configureTransport} />
       <MetronomeControls audioReady={ready} enabled={audio.metronomeEnabled} volume={audio.metronomeVolume}
         onEnabledChange={audio.setMetronomeEnabled} onVolumeChange={audio.setMetronomeVolume} />
