@@ -67,8 +67,8 @@ export function EnvironmentDiagnostics() {
   }
 
   return (
-    <section aria-labelledby="diagnostics-title" className="mt-8 border-t border-[var(--gray-a6)] pt-6">
-      <Heading as="h3" id="diagnostics-title" size="3" weight="medium">{ko.diagnosticsTitle}</Heading>
+    <section aria-labelledby="diagnostics-title" className="studio-side-content">
+      <Heading as="h2" id="diagnostics-title" size="3" weight="medium">{ko.diagnosticsTitle}</Heading>
       <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.diagnosticsDescription}</Text>
       <Button type="button" variant="outline" mt="4" disabled={checking} onClick={() => void checkEnvironment()}>
         {checking ? ko.diagnosticsChecking : ko.diagnosticsRun}

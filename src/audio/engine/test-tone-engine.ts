@@ -4,6 +4,7 @@ type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
   onToneStateChange: (playing: boolean) => void;
   onTransportStateChange: (snapshot: TransportSnapshot) => void;
+  onMetronomeStateChange: (enabled: boolean) => void;
   onProcessorError: () => void;
 };
 
@@ -25,7 +26,8 @@ export class AudioSetupError extends Error {
 export class TestToneEngine {
   private readonly context: AudioContext;
   private node: AudioWorkletNode | null = null;
-  private outputGain: GainNode | null = null;
+  private toneGain: GainNode | null = null;
+  private clickGain: GainNode | null = null;
   private disposed = false;
 
   private readonly handleContextStateChange = () => {
@@ -75,8 +77,8 @@ export class TestToneEngine {
 
     const node = new AudioWorkletNode(this.context, "loop-station-test-tone", {
       numberOfInputs: 0,
-      numberOfOutputs: 1,
-      outputChannelCount: [1],
+      numberOfOutputs: 2,
+      outputChannelCount: [1, 1],
     });
     node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.disposed) return;
@@ -88,15 +90,23 @@ export class TestToneEngine {
       if (typeof data !== "object" || data === null || !("type" in data)) return;
       if (data.type === "playing") this.callbacks.onToneStateChange(true);
       if (data.type === "stopped") this.callbacks.onToneStateChange(false);
+      if (data.type === "metronome" && "enabled" in data && typeof data.enabled === "boolean") {
+        this.callbacks.onMetronomeStateChange(data.enabled);
+      }
     };
     node.onprocessorerror = () => this.callbacks.onProcessorError();
 
-    const outputGain = this.context.createGain();
-    outputGain.gain.value = 0.15;
+    const toneGain = this.context.createGain();
+    toneGain.gain.value = 0.15;
+    const clickGain = this.context.createGain();
+    clickGain.gain.value = 0.15;
     this.node = node;
-    this.outputGain = outputGain;
-    node.connect(outputGain);
-    outputGain.connect(this.context.destination);
+    this.toneGain = toneGain;
+    this.clickGain = clickGain;
+    node.connect(toneGain, 0);
+    node.connect(clickGain, 1);
+    toneGain.connect(this.context.destination);
+    clickGain.connect(this.context.destination);
     this.context.addEventListener("statechange", this.handleContextStateChange);
   }
 
@@ -141,6 +151,16 @@ export class TestToneEngine {
     this.node?.port.postMessage({ type: "transport-configure", config });
   }
 
+  setMetronomeEnabled(enabled: boolean): void {
+    if (this.disposed || this.context.state !== "running") return;
+    this.node?.port.postMessage({ type: "metronome-enable", enabled });
+  }
+
+  setMetronomeVolume(volume: number): void {
+    if (this.disposed || !this.clickGain || !Number.isFinite(volume) || volume < 0 || volume > 100) return;
+    this.clickGain.gain.setTargetAtTime(volume * 0.003, this.context.currentTime, 0.005);
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
@@ -152,9 +172,11 @@ export class TestToneEngine {
     this.node?.port.postMessage({ type: "stop" });
     this.node?.port.close();
     this.node?.disconnect();
-    this.outputGain?.disconnect();
+    this.toneGain?.disconnect();
+    this.clickGain?.disconnect();
     this.node = null;
-    this.outputGain = null;
+    this.toneGain = null;
+    this.clickGain = null;
     if (this.context.state !== "closed") await this.context.close();
   }
 

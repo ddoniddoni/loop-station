@@ -51,8 +51,21 @@ export class AudioFrameClock {
     return this.running;
   }
 
+  get positionFrame(): number {
+    return this.frame;
+  }
+
+  get meter(): Readonly<TransportConfig> {
+    return this.config;
+  }
+
   get positionTick(): number {
     return this.anchorTick + (this.frame - this.anchorFrame) * PPQ * this.config.bpm / (60 * this.sampleRate);
+  }
+
+  /** Resolve every beat from its absolute tick, without accumulating rounded beat lengths. */
+  frameAtTick(tick: number): number {
+    return Math.round(this.anchorFrame + (tick - this.anchorTick) * 60 * this.sampleRate / (PPQ * this.config.bpm));
   }
 
   start(): void {

@@ -5,7 +5,7 @@ export function StudioTheme({ children }: { children: ReactNode }) {
   return (
     <Theme
       appearance="dark"
-      accentColor="amber"
+      accentColor="jade"
       grayColor="slate"
       panelBackground="solid"
       radius="medium"

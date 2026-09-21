@@ -44,24 +44,32 @@ export function TransportControls({ enabled, snapshot, onStart, onStop, onReset,
   }
 
   return (
-    <section aria-labelledby="transport-title" className="mt-8 border-t border-[var(--gray-a6)] pt-6">
-      <Heading as="h3" id="transport-title" size="3" weight="medium">{ko.transportTitle}</Heading>
-      <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.transportDescription}</Text>
-      <Flex align="center" gap="3" wrap="wrap" mt="4">
-        <Badge color={snapshot?.playing ? "green" : "gray"} variant="soft">
+    <section aria-labelledby="transport-title" className="studio-subsection studio-transport">
+      <div className="studio-section-heading">
+        <Heading as="h3" id="transport-title" size="3" weight="medium">{ko.transportTitle}</Heading>
+        <Badge color={snapshot?.playing ? "jade" : "gray"} variant="soft">
           {snapshot?.playing ? ko.transportPlaying : ko.transportStopped}
         </Badge>
-        <Text as="span" size="2">{ko.transportPosition}: <output aria-live="off">{positionLabel(snapshot)}</output></Text>
-        {snapshot && <Text as="span" size="2" color="gray">{snapshot.bpm} BPM · {snapshot.numerator}/{snapshot.denominator}</Text>}
-      </Flex>
-      <Flex gap="3" wrap="wrap" mt="4">
+      </div>
+      <Text as="p" size="2" color="gray" mt="2" className="leading-6">{ko.transportDescription}</Text>
+      <div className="studio-time-display">
+        <div>
+          <Text as="p" size="1" className="studio-display-label">{ko.transportPosition}</Text>
+          <output aria-live="off" className="studio-time-number">{positionLabel(snapshot)}</output>
+        </div>
+        <div className="studio-time-meta" aria-label={ko.transportBpm}>
+          <span>{snapshot?.bpm ?? draftBpm} <small>BPM</small></span>
+          <span>{snapshot ? `${snapshot.numerator}/${snapshot.denominator}` : draftMeter}</span>
+        </div>
+      </div>
+      <Flex gap="3" wrap="wrap" mt="4" className="studio-transport-actions">
         <Button type="button" disabled={!ready || snapshot?.playing} onClick={onStart}>{ko.transportPlay}</Button>
         <Button type="button" variant="soft" disabled={!ready || !snapshot?.playing} onClick={onStop}>{ko.transportStop}</Button>
         <Button type="button" variant="outline" color="gray" disabled={!ready || (snapshot?.positionFrame === 0 && !snapshot?.playing)} onClick={onReset}>
           {ko.transportReset}
         </Button>
       </Flex>
-      <form onSubmit={applySettings} className="mt-5 flex flex-wrap items-end gap-3">
+      <form onSubmit={applySettings} className="studio-transport-settings">
         <div>
           <label htmlFor="transport-bpm"><Text as="span" size="2">{ko.transportBpm}</Text></label>
           <TextField.Root id="transport-bpm" type="number" min="40" max="240" step="1" inputMode="numeric"

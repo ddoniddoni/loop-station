@@ -4,6 +4,7 @@ import { Button, Flex, Text } from "@radix-ui/themes";
 import { useEffect, useRef, useState } from "react";
 import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine";
 import type { TransportSnapshot } from "@/audio/transport/audio-frame-clock";
+import { MetronomeControls } from "@/components/audio/metronome-controls";
 import { TransportControls } from "@/components/audio/transport-controls";
 import { ko } from "@/lib/i18n/ko";
 
@@ -30,7 +31,7 @@ type AudioControlsProps = {
 
 function AudioControls({ phase, onStart, onStop, onResume, onToneStart, onToneStop }: AudioControlsProps) {
   return (
-    <Flex gap="3" wrap="wrap">
+    <Flex gap="3" wrap="wrap" className="studio-audio-actions">
       {(phase === "idle" || phase === "error") && (
         <Button type="button" onClick={onStart}>{phase === "error" ? ko.audioRetry : ko.audioStart}</Button>
       )}
@@ -65,6 +66,8 @@ export function AudioSetup() {
   const [phase, setPhase] = useState<AudioPhase>("idle");
   const [sampleRate, setSampleRate] = useState<number | null>(null);
   const [transport, setTransport] = useState<TransportSnapshot | null>(null);
+  const [metronomeEnabled, setMetronomeEnabled] = useState<boolean | null>(null);
+  const [metronomeVolume, setMetronomeVolume] = useState(50);
   const [issue, setIssue] = useState<string | null>(null);
 
   useEffect(() => () => {
@@ -78,6 +81,8 @@ export function AudioSetup() {
     setIssue(null);
     setPhase("starting");
     setTransport(null);
+    setMetronomeEnabled(null);
+    setMetronomeVolume(50);
 
     let engine: TestToneEngine;
     try {
@@ -91,6 +96,7 @@ export function AudioSetup() {
             release(engine);
             setSampleRate(null);
             setTransport(null);
+            setMetronomeEnabled(null);
             setPhase("error");
             setIssue(ko.audioErrors.closed);
           } else {
@@ -105,12 +111,16 @@ export function AudioSetup() {
         onTransportStateChange: (snapshot) => {
           if (engineRef.current === engine) setTransport(snapshot);
         },
+        onMetronomeStateChange: (enabled) => {
+          if (engineRef.current === engine) setMetronomeEnabled(enabled);
+        },
         onProcessorError: () => {
           if (engineRef.current !== engine) return;
           engineRef.current = null;
           release(engine);
           setSampleRate(null);
           setTransport(null);
+          setMetronomeEnabled(null);
           setPhase("error");
           setIssue(ko.audioErrors.processorFailed);
         },
@@ -133,6 +143,7 @@ export function AudioSetup() {
       engineRef.current = null;
       setSampleRate(null);
       setTransport(null);
+      setMetronomeEnabled(null);
       setPhase("error");
       setIssue(errorMessage(error, ko.audioErrors.startFailed));
     }
@@ -144,6 +155,7 @@ export function AudioSetup() {
     engineRef.current = null;
     setPhase("stopping");
     setTransport(null);
+    setMetronomeEnabled(null);
     try {
       await engine.dispose();
       setPhase("idle");
@@ -174,7 +186,7 @@ export function AudioSetup() {
   const status = issue ?? phaseStatus[phase];
 
   return (
-    <div className="mt-5">
+    <div className="studio-audio-stack">
       <AudioControls
         phase={phase}
         onStart={() => void startAudio()}
@@ -183,7 +195,7 @@ export function AudioSetup() {
         onToneStart={() => engineRef.current?.startTone()}
         onToneStop={() => engineRef.current?.stopTone()}
       />
-      <Text as="p" role={phase === "error" ? "alert" : "status"} size="2" color={issue ? "red" : "gray"} mt="3">
+      <Text as="p" role={phase === "error" ? "alert" : "status"} size="2" color={issue ? "red" : "gray"} mt="3" className="studio-engine-status">
         {status}
         {sampleRate !== null && phase !== "error" && <> · {ko.sampleRate}: {sampleRate} Hz</>}
       </Text>
@@ -194,6 +206,16 @@ export function AudioSetup() {
         onStop={() => engineRef.current?.stopTransport()}
         onReset={() => engineRef.current?.resetTransport()}
         onConfigure={(config) => engineRef.current?.configureTransport(config)}
+      />
+      <MetronomeControls
+        audioReady={phase === "ready" || phase === "playing"}
+        enabled={metronomeEnabled}
+        volume={metronomeVolume}
+        onEnabledChange={(enabled) => engineRef.current?.setMetronomeEnabled(enabled)}
+        onVolumeChange={(volume) => {
+          engineRef.current?.setMetronomeVolume(volume);
+          setMetronomeVolume(volume);
+        }}
       />
     </div>
   );
