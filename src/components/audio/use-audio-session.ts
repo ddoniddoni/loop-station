@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine";
 import type { MicrophoneController } from "@/audio/input/microphone-controller";
+import type { LoopController } from "@/audio/loop/loop-controller";
 import type { TransportConfig, TransportSnapshot } from "@/audio/transport/audio-frame-clock";
 import { ko } from "@/lib/i18n/ko";
 
@@ -16,7 +17,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof AudioSetupError ? ko.audioErrors[error.code] : fallback;
 }
 
-export function useAudioSession(input: MicrophoneController) {
+export function useAudioSession(input: MicrophoneController, loop: LoopController) {
   const engineRef = useRef<TestToneEngine | null>(null);
   const [phase, setPhase] = useState<AudioPhase>("idle");
   const [sampleRate, setSampleRate] = useState<number | null>(null);
@@ -31,6 +32,14 @@ export function useAudioSession(input: MicrophoneController) {
     if (engine) release(engine);
     input.dispose();
   }, [input]);
+
+  useEffect(() => {
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      if (loop.dirty) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [loop]);
 
   async function startAudio(): Promise<void> {
     if (engineRef.current) return;
@@ -80,7 +89,7 @@ export function useAudioSession(input: MicrophoneController) {
           setPhase("error");
           setIssue(ko.audioErrors.processorFailed);
         },
-      }, input);
+      }, input, loop);
     } catch (error) {
       setPhase("error");
       setIssue(errorMessage(error, ko.audioErrors.startFailed));

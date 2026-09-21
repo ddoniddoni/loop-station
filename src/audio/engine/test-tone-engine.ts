@@ -1,5 +1,6 @@
 import { isTransportSnapshot, type TransportConfig, type TransportSnapshot } from "../transport/audio-frame-clock";
 import type { MicrophoneController } from "../input/microphone-controller";
+import type { LoopController } from "../loop/loop-controller";
 
 type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
@@ -29,16 +30,18 @@ export class TestToneEngine {
   private node: AudioWorkletNode | null = null;
   private toneGain: GainNode | null = null;
   private clickGain: GainNode | null = null;
+  private loopGain: GainNode | null = null;
   private disposed = false;
 
   private readonly handleContextStateChange = () => {
     if (this.disposed) return;
     if (this.context.state !== "running") this.stopTone();
     this.input.setAudioRunning(this.context.state === "running");
+    this.loop.setRunning(this.context.state === "running");
     this.callbacks.onContextStateChange(this.context.state);
   };
 
-  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController) {
+  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController, private readonly loop: LoopController) {
     if (!window.isSecureContext) {
       throw new AudioSetupError("insecure-context");
     }
@@ -79,8 +82,8 @@ export class TestToneEngine {
 
     const node = new AudioWorkletNode(this.context, "loop-station-test-tone", {
       numberOfInputs: 1,
-      numberOfOutputs: 3,
-      outputChannelCount: [1, 1, 1],
+      numberOfOutputs: 4,
+      outputChannelCount: [1, 1, 1, 1],
       channelCount: 1,
       channelCountMode: "explicit",
     });
@@ -88,7 +91,9 @@ export class TestToneEngine {
       if (this.disposed) return;
       const data = event.data;
       this.input.acceptMeter(data);
+      this.loop.accept(data);
       if (isTransportSnapshot(data)) {
+        this.loop.acceptTransport(data);
         this.callbacks.onTransportStateChange(data);
         return;
       }
@@ -111,11 +116,16 @@ export class TestToneEngine {
     this.node = node;
     this.toneGain = toneGain;
     this.clickGain = clickGain;
+    this.loopGain = this.context.createGain();
+    this.loopGain.gain.value = 0.5;
+    node.connect(this.loopGain, 3);
+    this.loopGain.connect(this.context.destination);
     node.connect(toneGain, 0);
     node.connect(clickGain, 1);
     toneGain.connect(this.context.destination);
     clickGain.connect(this.context.destination);
     this.input.attachAudio(this.context, node);
+    this.loop.attach(this.context, node);
     this.context.addEventListener("statechange", this.handleContextStateChange);
   }
 
@@ -127,6 +137,7 @@ export class TestToneEngine {
       throw new AudioSetupError("not-running");
     }
     this.input.setAudioRunning(true);
+    this.loop.setRunning(true);
     this.callbacks.onContextStateChange("running");
   }
 
@@ -148,16 +159,18 @@ export class TestToneEngine {
 
   stopTransport(): void {
     if (this.disposed || this.context.state !== "running") return;
+    this.loop.stop();
     this.node?.port.postMessage({ type: "transport-stop" });
   }
 
   resetTransport(): void {
     if (this.disposed || this.context.state !== "running") return;
+    this.loop.stop();
     this.node?.port.postMessage({ type: "transport-reset" });
   }
 
   configureTransport(config: TransportConfig): void {
-    if (this.disposed || this.context.state !== "running") return;
+    if (this.disposed || this.context.state !== "running" || this.loop.locked) return;
     this.node?.port.postMessage({ type: "transport-configure", config });
   }
 
@@ -175,6 +188,7 @@ export class TestToneEngine {
     if (this.disposed) return;
     this.disposed = true;
     this.context.removeEventListener("statechange", this.handleContextStateChange);
+    this.loop.detach();
     this.input.detachAudio();
     if (this.node) {
       this.node.onprocessorerror = null;
@@ -185,9 +199,11 @@ export class TestToneEngine {
     this.node?.disconnect();
     this.toneGain?.disconnect();
     this.clickGain?.disconnect();
+    this.loopGain?.disconnect();
     this.node = null;
     this.toneGain = null;
     this.clickGain = null;
+    this.loopGain = null;
     if (this.context.state !== "closed") await this.context.close();
   }
 

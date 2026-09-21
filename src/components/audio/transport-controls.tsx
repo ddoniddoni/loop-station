@@ -9,6 +9,7 @@ import { StudioIcon } from "@/components/ui/studio-icon";
 
 type TransportControlsProps = {
   enabled: boolean;
+  settingsLocked: boolean;
   snapshot: TransportSnapshot | null;
   onStart: () => void;
   onStop: () => void;
@@ -26,24 +27,9 @@ function positionParts(snapshot: TransportSnapshot | null): { bar: string; beat:
   return { bar: String(bar), beat: String(beat) };
 }
 
-export function TransportControls({ enabled, snapshot, onStart, onStop, onReset, onConfigure }: TransportControlsProps) {
-  const [draftBpm, setDraftBpm] = useState("120");
-  const [draftMeter, setDraftMeter] = useState("4/4");
-  const [issue, setIssue] = useState<string | null>(null);
+export function TransportControls({ enabled, settingsLocked, snapshot, onStart, onStop, onReset, onConfigure }: TransportControlsProps) {
   const ready = enabled && snapshot !== null;
   const position = positionParts(snapshot);
-
-  function applySettings(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    const bpm = Number(draftBpm);
-    const meter = TRANSPORT_METERS.find(({ label }) => label === draftMeter);
-    if (!Number.isInteger(bpm) || bpm < 40 || bpm > 240 || !meter) {
-      setIssue(ko.transportInvalidTempo);
-      return;
-    }
-    setIssue(null);
-    onConfigure({ bpm, numerator: meter.numerator, denominator: meter.denominator });
-  }
 
   return (
     <section aria-label={ko.transportTitle} className="station-transport">
@@ -55,6 +41,31 @@ export function TransportControls({ enabled, snapshot, onStart, onStop, onReset,
         <span className="station-counter-caption">TRANSPORT COUNTER</span>
         <div><span>BAR</span><output aria-live="off" aria-label={`${position.bar} ${ko.studioBar}`}>{position.bar}</output><span className="station-counter-divider" aria-hidden="true">|</span><span>BEAT</span><output aria-live="off" aria-label={`${position.beat} ${ko.studioBeat}`}>{position.beat}</output><i data-playing={snapshot?.playing ?? false} aria-hidden="true" /></div>
       </div>
+      <TransportSettings enabled={enabled} settingsLocked={settingsLocked} snapshot={snapshot} onReset={onReset} onConfigure={onConfigure} />
+    </section>
+  );
+}
+
+function TransportSettings({ enabled, settingsLocked, snapshot, onReset, onConfigure }: Pick<TransportControlsProps, "enabled" | "settingsLocked" | "snapshot" | "onReset" | "onConfigure">) {
+  const [draftBpm, setDraftBpm] = useState("120");
+  const [draftMeter, setDraftMeter] = useState("4/4");
+  const [issue, setIssue] = useState<string | null>(null);
+  const ready = enabled && snapshot !== null;
+
+  function applySettings(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (settingsLocked) return;
+    const bpm = Number(draftBpm);
+    const meter = TRANSPORT_METERS.find(({ label }) => label === draftMeter);
+    if (!Number.isInteger(bpm) || bpm < 40 || bpm > 240 || !meter) {
+      setIssue(ko.transportInvalidTempo);
+      return;
+    }
+    setIssue(null);
+    onConfigure({ bpm, numerator: meter.numerator, denominator: meter.denominator });
+  }
+
+  return (
       <Popover.Root>
         <Popover.Trigger>
           <Button type="button" variant="outline" color="gray" className="station-tempo-trigger" aria-label="템포와 박자 설정">
@@ -67,22 +78,22 @@ export function TransportControls({ enabled, snapshot, onStart, onStop, onReset,
             <div className="station-tempo-field">
               <label htmlFor="transport-bpm">{ko.transportTempoLabel}</label>
               <TextField.Root id="transport-bpm" type="number" min="40" max="240" step="1" inputMode="numeric"
-                value={draftBpm} disabled={!ready} onChange={(event) => setDraftBpm(event.target.value)} />
+                value={draftBpm} disabled={!ready || settingsLocked} onChange={(event) => setDraftBpm(event.target.value)} />
             </div>
             <div className="station-tempo-field">
               <label htmlFor="transport-meter">{ko.transportMeter}</label>
-              <Select.Root value={draftMeter} disabled={!ready} onValueChange={setDraftMeter}>
+              <Select.Root value={draftMeter} disabled={!ready || settingsLocked} onValueChange={setDraftMeter}>
                 <Select.Trigger id="transport-meter" aria-label={ko.transportMeter} />
                 <Select.Content position="popper">{TRANSPORT_METERS.map((meter) => <Select.Item key={meter.label} value={meter.label}>{meter.label}</Select.Item>)}</Select.Content>
               </Select.Root>
             </div>
-            <Button type="submit" variant="outline" disabled={!ready}>{ko.transportApply}</Button>
+            <Button type="submit" variant="outline" disabled={!ready || settingsLocked}>{ko.transportApply}</Button>
           </form>
+          {settingsLocked && <Text as="p" size="2" color="gray" mt="2">녹음 또는 루프가 있는 동안 BPM·박자표는 고정됩니다. 트랙을 비우면 변경할 수 있습니다.</Text>}
           <Button type="button" variant="soft" color="gray" mt="3" disabled={!ready || (snapshot?.positionFrame === 0 && !snapshot?.playing)} onClick={onReset}><StudioIcon name="undo" size={16} />{ko.transportReset}</Button>
           <Text as="p" size="2" color="gray" mt="3">{snapshot ? `${ko.transportCurrentSetting} ${snapshot.bpm} BPM · ${snapshot.numerator}/${snapshot.denominator}` : ko.transportNeedsAudio}</Text>
           {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
         </Popover.Content>
       </Popover.Root>
-    </section>
   );
 }

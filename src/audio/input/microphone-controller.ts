@@ -15,12 +15,13 @@ export type MicrophoneSnapshot = {
   gainDb: number;
   monitorEnabled: boolean;
   monitorVolume: number;
+  captureLocked: boolean;
   meter: InputMeterSnapshot | null;
 };
 
 const initialSnapshot: MicrophoneSnapshot = {
   phase: "idle", info: null, devices: [], issue: null, listUnavailable: false,
-  audioReady: false, routed: false, gainDb: 0, monitorEnabled: false, monitorVolume: 20, meter: null,
+  audioReady: false, routed: false, gainDb: 0, monitorEnabled: false, monitorVolume: 20, meter: null, captureLocked: false,
 };
 
 // Browser objects stay here; React subscribes only to the lightweight snapshot.
@@ -68,6 +69,7 @@ export class MicrophoneController {
   }
 
   async request(deviceId?: string): Promise<void> {
+    if (this.snapshot.captureLocked) return;
     const version = ++this.requestVersion;
     this.disableMonitor();
     this.update({ phase: this.session?.active ? "switching" : "requesting", issue: null });
@@ -91,6 +93,10 @@ export class MicrophoneController {
     this.requestVersion += 1;
     this.session?.cancelPending();
     this.update({ phase: this.session?.active ? "active" : "idle", issue: this.session?.active ? null : "cancelled" });
+  }
+
+  setCaptureLocked(locked: boolean): void {
+    if (locked !== this.snapshot.captureLocked) this.update({ captureLocked: locked });
   }
 
   release(): void {
