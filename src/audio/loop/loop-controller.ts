@@ -1,7 +1,21 @@
 import type { MicrophoneController } from "../input/microphone-controller";
 import type { TransportSnapshot } from "../transport/audio-frame-clock";
-import { LoopHistory, type CachedLoop, type HistoryDirection } from "./loop-history";
+import { LoopHistory, type CachedLoop, type HistoryDirection, type LoopHistoryState } from "./loop-history";
+import { IndexedDbLoopRepository } from "../storage/indexed-db-loop-repository";
+import { initialSaveState, LoopPersistence, type LoopSaveState } from "../storage/loop-persistence";
+import type { LoopRepository } from "../storage/loop-session";
 import { isLoopMetadata, isLoopStatus, LOOP_MEMORY_BYTES, recordingCapacity, type CaptureMode, type LoopMetadata, type LoopPhase, type LoopStatus } from "./loop-protocol";
+
+export type LoopWorkspace = {
+  trackId: number;
+  getSave(): LoopSaveState;
+  getActiveTrack(): number | null;
+  getRetainedBytes(): number;
+  readonly memoryLimit: number;
+  getIssue(): string | null;
+  changed(): void;
+  notify(): void;
+};
 
 type PendingCapture = { mode: CaptureMode; sequence: number | null; generation: number };
 type PendingHistory = { direction: HistoryDirection; target: CachedLoop; sequence: number };
@@ -19,11 +33,15 @@ export type LoopSnapshot = {
   pendingPlay: boolean;
   issue: string | null;
   storageNote: string | null;
+  save: LoopSaveState;
+  blockedByTrack: number | null;
+  workspaceIssue: string | null;
 };
 const initialSnapshot: LoopSnapshot = {
   phase: "empty", captureMode: null, connected: false, hasClip: false, canRestore: false,
   canUndo: false, canRedo: false, historyPending: null, metadata: null,
   progress: 0, pendingPlay: false, issue: null, storageNote: null,
+  save: initialSaveState, blockedByTrack: null, workspaceIssue: null,
 };
 
 export function isCapturePhase(phase: LoopPhase): boolean {
@@ -31,20 +49,21 @@ export function isCapturePhase(phase: LoopPhase): boolean {
 }
 
 async function checkStorage(bytes: number): Promise<string | null> {
-  if (!navigator.storage?.estimate) return "저장 공간을 확인할 수 없습니다. 녹음은 이 탭에서만 유지됩니다.";
+  if (!navigator.storage?.estimate) return "저장 여유 공간을 미리 확인할 수 없습니다. 녹음 후 저장 상태를 확인하세요.";
   let estimate: StorageEstimate;
   try { estimate = await navigator.storage.estimate(); }
-  catch { return "저장 공간 조회에 실패했습니다. 녹음은 이 탭에서만 유지됩니다."; }
-  if (estimate.quota === undefined || estimate.usage === undefined) return "저장 공간을 확인할 수 없습니다. 녹음은 이 탭에서만 유지됩니다.";
+  catch { return "저장 공간 조회에 실패했습니다. 녹음 후 저장 상태를 확인하세요."; }
+  if (estimate.quota === undefined || estimate.usage === undefined) return "저장 여유 공간을 확인할 수 없습니다. 녹음 후 저장 상태를 확인하세요.";
   if (estimate.quota - estimate.usage < bytes * 2) throw new Error("녹음에 필요한 저장 여유 공간이 부족합니다.");
   return null;
 }
 
-/** Session-only PCM ownership. React receives metadata and frame progress, never PCM. */
+/** PCM ownership and persistence. React receives metadata and progress, never PCM. */
 export class LoopController {
   private snapshot = initialSnapshot;
   private readonly listeners = new Set<() => void>();
   private readonly history = new LoopHistory();
+  private readonly persistence: LoopPersistence;
   private node: AudioWorkletNode | null = null;
   private context: AudioContext | null = null;
   private transport: TransportSnapshot | null = null;
@@ -55,7 +74,37 @@ export class LoopController {
   private bufferReady = true;
   private unsubscribeInput: (() => void) | null = null;
 
-  constructor(private readonly input: MicrophoneController) {}
+  constructor(private readonly input: MicrophoneController, repository: LoopRepository | null = new IndexedDbLoopRepository(), private readonly workspace?: LoopWorkspace) {
+    this.persistence = new LoopPersistence(repository, (state) => this.hydrate(state), () => this.update({}));
+    this.snapshot = { ...initialSnapshot, save: this.saveState };
+  }
+
+  get historyState(): LoopHistoryState { return this.history.snapshot(); }
+  get retainedBytes(): number { return this.history.retainedBytes; }
+  get performing(): boolean { return this.pendingCapture !== null || this.pendingHistory !== null || isCapturePhase(this.snapshot.phase); }
+  private get saveState(): LoopSaveState { return this.workspace?.getSave() ?? this.persistence.snapshot; }
+  private get blockedByTrack(): number | null {
+    const active = this.workspace?.getActiveTrack() ?? null;
+    return active === this.workspace?.trackId ? null : active;
+  }
+  refreshWorkspace(): void { this.update({}, false); }
+  hydrate(state: LoopHistoryState): void {
+    this.history.hydrate(state);
+    this.update({ phase: this.idlePhase(), progress: 0, pendingPlay: false });
+    this.sendCached();
+  }
+  private persist(): void {
+    if (this.workspace) this.workspace.changed();
+    else this.persistence.changed(this.history.snapshot());
+  }
+
+  initializeStorage(): Promise<void> { return this.persistence.initialize(); }
+  listenForStorageChanges(): () => void { return this.persistence.listen(); }
+  retryStorage(): Promise<void> {
+    if (this.pendingCapture || this.pendingHistory || isCapturePhase(this.snapshot.phase)) return Promise.resolve();
+    return this.persistence.retry();
+  }
+  useSessionOnly(): void { this.persistence.useSessionOnly(); }
 
   readonly getSnapshot = (): LoopSnapshot => this.snapshot;
   readonly getServerSnapshot = (): LoopSnapshot => initialSnapshot;
@@ -64,8 +113,8 @@ export class LoopController {
     return () => { this.listeners.delete(listener); };
   };
   get locked(): boolean { return this.snapshot.hasClip || this.busy; }
-  get dirty(): boolean { return this.history.dirty || this.pendingCapture !== null; }
-  private get busy(): boolean { return this.pendingCapture !== null || this.pendingHistory !== null || isCapturePhase(this.snapshot.phase); }
+  get dirty(): boolean { return this.persistence.dirty || this.pendingCapture !== null || this.pendingHistory !== null; }
+  private get busy(): boolean { return this.workspace?.getIssue() != null || this.blockedByTrack !== null || this.saveState.editLocked || this.pendingCapture !== null || this.pendingHistory !== null || isCapturePhase(this.snapshot.phase); }
 
   attach(context: AudioContext, node: AudioWorkletNode): void {
     this.context = context;
@@ -136,6 +185,7 @@ export class LoopController {
     this.history.commit({ pcm: value.pcm, metadata: value.metadata }, capture.mode);
     this.pendingCapture = null;
     this.update({ captureMode: null });
+    this.persist();
   }
 
   private acceptHistory(value: object): void {
@@ -145,6 +195,7 @@ export class LoopController {
     else if (value.type !== "loop-revision-cancelled" && value.type !== "loop-revision-rejected") return;
     this.pendingHistory = null;
     this.update({ issue: value.type === "loop-revision-rejected" ? "이력을 적용하지 못했습니다. 현재 루프는 유지됩니다." : null });
+    if (value.type === "loop-revision-applied") this.persist();
   }
 
   acceptTransport(transport: TransportSnapshot): void { this.transport = transport; }
@@ -171,14 +222,15 @@ export class LoopController {
     try {
       const bytes = recordingCapacity(this.context.sampleRate, config) * Float32Array.BYTES_PER_ELEMENT;
       if (bytes * 4 + this.history.retainedBytes * 2 > LOOP_MEMORY_BYTES) throw new Error("32MiB 작업 메모리가 부족합니다. 기존 루프와 복구 이력은 유지됩니다.");
-      const storageNote = await checkStorage(bytes);
+      if (this.workspace && bytes * 4 + this.workspace.getRetainedBytes() * 3 > this.workspace.memoryLimit) throw new Error("프로젝트의 128MiB 작업 메모리가 부족합니다. 다른 트랙과 복구 이력은 유지됩니다.");
+      const storageNote = this.saveState.phase === "session" ? "저장 없이 연주 중입니다. 변경은 이 탭에만 남습니다." : await checkStorage(bytes + (this.workspace?.getRetainedBytes() ?? 0));
       if (capture.generation !== this.generation || node !== this.node) return;
       if (!this.snapshot.connected || !this.input.getSnapshot().routed) throw new Error("녹음 준비 중 입력 연결이 끊어졌습니다.");
       const pcm = new ArrayBuffer(bytes);
       const archive = new ArrayBuffer(bytes);
       capture.sequence = ++this.sequence;
       this.update({ phase: "armed", storageNote });
-      node.port.postMessage({ type: mode === "record" ? "loop-record" : "loop-overdub", sequence: capture.sequence, config, pcm, archive }, [pcm, archive]);
+      node.port.postMessage({ trackId: this.workspace?.trackId, type: mode === "record" ? "loop-record" : "loop-overdub", sequence: capture.sequence, config, pcm, archive }, [pcm, archive]);
     } catch (error) {
       if (capture.generation !== this.generation) return;
       this.pendingCapture = null;
@@ -228,12 +280,14 @@ export class LoopController {
     this.bufferReady = true;
     this.command("loop-clear");
     this.update({ phase: "empty", progress: 0, pendingPlay: false, issue: null, connected: this.context?.state === "running" });
+    this.persist();
   }
 
   restore(): void {
     if (this.busy || !this.history.restore()) return;
     this.update({ phase: this.idlePhase(), issue: null });
     this.sendCached();
+    this.persist();
   }
 
   changeHistory(direction: HistoryDirection): void {
@@ -241,11 +295,12 @@ export class LoopController {
     if (this.busy || !target || !this.node || !this.snapshot.connected) return;
     try {
       if (this.history.retainedBytes * 2 + target.pcm.byteLength > LOOP_MEMORY_BYTES) throw new Error("이력 복구에 필요한 메모리가 부족합니다.");
+      if (this.workspace && this.workspace.getRetainedBytes() * 3 + target.pcm.byteLength > this.workspace.memoryLimit) throw new Error("프로젝트 이력 복구에 필요한 메모리가 부족합니다.");
       const pcm = target.pcm.slice(0);
       const sequence = ++this.sequence;
       this.pendingHistory = { direction, target, sequence };
       this.update({ issue: null });
-      this.node.port.postMessage({ type: "loop-revision", sequence, pcm, metadata: target.metadata }, [pcm]);
+      this.node.port.postMessage({ trackId: this.workspace?.trackId, type: "loop-revision", sequence, pcm, metadata: target.metadata }, [pcm]);
     } catch (error) {
       this.pendingHistory = null;
       this.update({ issue: error instanceof Error ? error.message : "이력을 준비하지 못했습니다." });
@@ -271,7 +326,7 @@ export class LoopController {
     }
     try {
       const pcm = cached.pcm.slice(0);
-      this.node.port.postMessage({ type: "loop-restore", sequence: ++this.sequence, pcm, metadata: cached.metadata }, [pcm]);
+      this.node.port.postMessage({ trackId: this.workspace?.trackId, type: "loop-restore", sequence: ++this.sequence, pcm, metadata: cached.metadata }, [pcm]);
       this.bufferReady = true;
       this.update({ connected: this.context.state === "running" });
     } catch {
@@ -280,13 +335,14 @@ export class LoopController {
   }
 
   private command(type: "loop-play" | "loop-stop" | "loop-clear" | "loop-cancel" | "loop-interrupt" | "loop-cancel-revision", captureMode?: CaptureMode): void {
-    this.node?.port.postMessage({ type, sequence: ++this.sequence, captureMode });
+    this.node?.port.postMessage({ trackId: this.workspace?.trackId, type, sequence: ++this.sequence, captureMode });
   }
-  private update(patch: Partial<LoopSnapshot>): void {
+  private update(patch: Partial<LoopSnapshot>, notifyWorkspace = true): void {
     this.snapshot = { ...this.snapshot, ...patch, hasClip: this.history.current !== null, metadata: this.history.current?.metadata ?? null,
       canUndo: this.history.canUndo, canRedo: this.history.canRedo, canRestore: this.history.canRestore,
-      historyPending: this.pendingHistory?.direction ?? null };
-    this.input.setCaptureLocked(isCapturePhase(this.snapshot.phase));
+      historyPending: this.pendingHistory?.direction ?? null, save: this.saveState, blockedByTrack: this.blockedByTrack, workspaceIssue: this.workspace?.getIssue() ?? null };
+    if (!this.workspace) this.input.setCaptureLocked(isCapturePhase(this.snapshot.phase));
     for (const listener of this.listeners) listener();
+    if (notifyWorkspace) this.workspace?.notify();
   }
 }

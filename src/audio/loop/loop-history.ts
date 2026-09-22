@@ -3,6 +3,7 @@ import type { CaptureMode, LoopMetadata } from "./loop-protocol";
 export type CachedLoop = { pcm: ArrayBuffer; metadata: LoopMetadata };
 export type HistoryDirection = "undo" | "redo";
 type Revisions = { current: CachedLoop; undo: CachedLoop | null; redo: CachedLoop | null };
+export type LoopHistoryState = { current: CachedLoop | null; undo: CachedLoop | null; redo: CachedLoop | null; cleared: Revisions | null };
 
 /** One reversible overdub session; immutable PCM stays outside React state. */
 export class LoopHistory {
@@ -10,6 +11,17 @@ export class LoopHistory {
   private undoRevision: CachedLoop | null = null;
   private redoRevision: CachedLoop | null = null;
   private cleared: Revisions | null = null;
+
+  snapshot(): LoopHistoryState {
+    return { current: this.current, undo: this.undoRevision, redo: this.redoRevision, cleared: this.cleared };
+  }
+
+  hydrate(state: LoopHistoryState): void {
+    this.current = state.current;
+    this.undoRevision = state.undo;
+    this.redoRevision = state.redo;
+    this.cleared = state.cleared;
+  }
 
   get canUndo(): boolean { return this.undoRevision !== null; }
   get canRedo(): boolean { return this.redoRevision !== null; }

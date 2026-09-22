@@ -2,13 +2,13 @@
 
 ## 현재 상태
 
-- 기준일: 2026-09-22
-- 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0/1은 부분 구현·미검증. Phase 2는 01 트랙의 한 바퀴 오버더빙과 직전 1회 Undo/Redo까지 부분 구현·미검증.**
+- 기준일: 2026-09-23
+- 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0/1은 부분 구현·미검증. Phase 2는 공통 시계의 8트랙 녹음·반복·오버더빙·Undo/Redo·프로젝트 저장까지 부분 구현·미검증.**
 - 프로젝트 위치: `/Users/ddoni/dev/loop-station`. Next.js App Router 기반 한국어 준비 화면과 순수 시간 변환 함수를 생성함.
-- UI 기반: Radix Themes 3.3.0과 Stitch 콘솔 배치를 유지함. 01 트랙에 4마디 녹음·반복·한 바퀴 오버더빙·취소·Undo/Redo·예약 취소·비우기·복구를 연결하고 실제 프레임 진행률과 클립 길이를 표시함. 나머지 7개 트랙·믹서·FX는 미구현 상태로 유지함. 마이크 입력 설정은 인스펙터의 Radix Dialog에서 제공함.
-- 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 오디오·입력·녹음·반복은 사용자 요청에 따라 테스트 실행을 중단함. 새 PCM 녹음 테스트 9개와 오버더빙·이력·명령 처리 테스트 21개는 작성만 했으며, 실제 녹음·Worklet·권한·장치·실청취는 미검증.
+- UI 기반: Radix Themes 3.3.0과 Stitch 콘솔 배치를 유지함. 01–08 모든 트랙에 4마디 녹음·반복·오버더빙·Undo/Redo·비우기·복구를 연결함. 모바일 Bank 1–4/5–8와 선택 트랙 상세 정보 지원. LOCAL에서 프로젝트 저장 상태와 재시도 제공. 믹서·FX는 미구현.
+- 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 사용자 요청에 따라 테스트 실행을 중단함. PCM 녹음 테스트 9개, 오버더빙·이력·명령 처리 테스트 21개, 저장 관련 단위 테스트 10개, 다중 트랙 단위 테스트 12개와 저장 E2E 시나리오 3개는 작성만 했음. 실제 녹음·Worklet·권한·장치·실청취·IndexedDB 저장/복구는 미검증.
 - 디자인 재확인: 이번 사용자 요청 범위에서 원본 이미지 열람과 실제 DOM의 데스크톱·모바일 배치 치수, 설정창 표시만 확인함. 캡처 도구 시간 초과로 구현 화면의 스크린샷 비교는 미완료이며, 오디오·마이크 기능을 시작하지 않음.
-- 다음 작업: 기능 개발은 확정한 루프의 IndexedDB 로컬 저장. 테스트 재개 요청 후 Worklet·마이크·공통 시계·PCM 녹음·오버더빙·Undo/Redo를 검증. 그 전에는 Phase 0/1/2와 관련 요구사항을 검증 완료로 표시하지 않음.
+- 다음 작업: 트랙별 볼륨·Mute·Solo 믹서를 작은 수직 단위로 구현. 테스트 재개 요청 후 다중 트랙 Worklet·마이크·공통 시계·PCM·이력·프로젝트 저장/복구와 v1 이전을 검증. 그 전에는 Phase 0/1/2와 관련 요구사항을 검증 완료로 표시하지 않음.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
@@ -23,7 +23,7 @@
 |---|---|---|---|
 | 0 | 저장소와 실제 오디오 기반 | 부분 구현 | SYS-01 검증. 사용자 시작/종료, 테스트 신호 Worklet, 마이크 권한·장치 UI와 환경 진단 구현. 실제 브라우저 검증은 남음 |
 | 1 | 한 트랙 녹음과 공통 시계 | 부분 구현 | 같은 Worklet 시계로 01 트랙의 다음 마디 시작·4마디 PCM 캡처·자동 반복·정지/재시작 구현. 채널 선택, AUTO 모니터링, Tap Tempo, 카운트인·다른 퀀타이즈 설정, 실제 검증은 남음 |
-| 2 | 8트랙, 오버더빙, 로컬 저장 | 부분 구현 | 01 트랙의 한 바퀴 오버더빙, 1단계 Undo/Redo와 예약 취소 구현. 다중 트랙·로컬 저장·실제 PCM/Undo 검증은 남음 |
+| 2 | 8트랙, 오버더빙, 로컬 저장 | 부분 구현 | 8트랙의 공통 시계 반복·오버더빙·1단계 Undo/Redo·프로젝트 자동 저장과 v1 이전 구현. 믹서·다른 루프 길이·실제 검증은 남음 |
 | 3 | 편집, 지연 보정, 파일 입출력 | 미착수 | 기본 루핑 제품 완성 목표 |
 | 4 | FX, 장면, 내부 녹음 | 미착수 | 라우팅/공연 녹음 검증 |
 | 5 | MIDI, 리듬, 자동화, 곡 구성 | 미착수 | 내부 악기와 컨트롤러 기능 |
@@ -38,7 +38,7 @@
 | ID | 기능 | 주 Phase | 상태 | 실제 검증/남은 항목 |
 |---|---|---:|---|---|
 | SYS-01 | 프로젝트 기반 | 0 | 검증 완료 | App Router, React, TS strict, npm lockfile, lint/typecheck/test/build 및 production E2E 통과 |
-| SYS-02 | 로컬 우선 실행 | 2 | 미착수 | — |
+| SYS-02 | 로컬 우선 실행 | 2 | 부분 구현 | 계정/환경변수 없이 8트랙 프로젝트 저장·복구. 저장 실패 시 이전 저장본 보존과 메모리 전용 모드 제공. 프로젝트 목록·오프라인 캐시·실제 검증은 남음 |
 | SYS-03 | 안전한 오디오 시작 | 0 | 부분 구현 | AudioContext/Worklet과 마이크 요청을 분리. 권한 거부·장치 없음·읽기 실패·제약 불일치·대기 취소·연결 끊김 안내 코드 구현. 실제 브라우저 검증은 남음 |
 | SYS-04 | 환경 진단 | 0 | 구현 완료/미검증 | AudioContext sampleRate와 마이크 `getSettings()`의 채널·처리 설정 표시. 버튼을 누르면 AudioWorklet·마이크·MIDI·IndexedDB API, 보안 연결·격리 모드, 저장소 사용량/할당량 추정과 영구 저장 허용 상태를 읽음. API 존재와 실제 동작은 구분하며 브라우저 검증은 남음 |
 | IN-01 | 입력 장치와 채널 선택 | 1 | 부분 구현 | 장치 목록·전환과 모노 녹음 라우팅 구현. 녹음 준비·대기·캡처 중 장치 변경 차단. 채널 선택과 실제 장치 검증은 남음 |
@@ -50,8 +50,8 @@
 | CLK-04 | 첫 루프로 템포 설정 | 2 | 미착수 | — |
 | CLK-05 | 장시간 동기화 | 2 | 미착수 | — |
 | CLK-06 | 템포 변경 정책 | 6 | 미착수 | — |
-| LOOP-01 | 다중 트랙 | 2 | 미착수 | — |
-| LOOP-02 | 녹음과 오버더빙 | 2 | 부분 구현 | 01 트랙의 모노 float32 PCM 녹음→반복과 한 바퀴 오버더빙 구현. 기존 PCM과 작업 버퍼 분리, 취소/입력 끊김 시 기존 루프 유지. 연속 여러 바퀴·다중 트랙·실제 검증은 남음 |
+| LOOP-01 | 다중 트랙 | 2 | 부분 구현 | 8개 모노·4마디 트랙, 공통 AudioFrameClock, 트랙별 녹음/반복/편집과 모바일 두 Bank 연결. 동시 캡처는 1개로 제한. 믹서·다른 길이·장시간/브라우저/장치 검증은 남음 |
+| LOOP-02 | 녹음과 오버더빙 | 2 | 부분 구현 | 8트랙 각각 모노 float32 PCM 녹음→반복과 한 바퀴 오버더빙 구현. 다른 트랙 재생은 유지하며 동시 편집 차단. 입력 중단/취소 시 기존 루프 유지. 연속 여러 바퀴·실제 검증은 남음 |
 | LOOP-03 | Undo, Redo, Clear | 2 | 부분 구현 | 직전 오버더빙 1회 Undo/Redo를 재생 경계에서 적용, 예약 취소 지원. 비우기 복구 시 편집 이력도 복원. 다단계 이력·전체 비우기·실제 검증은 남음 |
 | LOOP-04 | Replace와 Feedback | 4 | 미착수 | — |
 | LOOP-05 | 재생과 정지 모드 | 3 | 미착수 | — |
@@ -85,11 +85,11 @@
 | MIDI-03 | MIDI 클립 | 5 | 미착수 | — |
 | MIDI-04 | 외부 MIDI 동기화 | 6 | 미착수 | — |
 | FILE-01 | 오디오 가져오기 | 3 | 미착수 | — |
-| FILE-02 | 로컬 자동 저장 | 2 | 미착수 | — |
+| FILE-02 | 로컬 자동 저장 | 2 | 부분 구현 | 8트랙 PCM·공통 박자·각 이력을 하나의 트랜잭션으로 저장. 새로고침 복구·저장 상태·재시도 제공. 프로젝트 목록·녹음 journal·실제 브라우저 검증은 남음 |
 | FILE-03 | 프로젝트 아카이브 | 3 | 미착수 | — |
 | FILE-04 | 믹스와 스템 WAV | 3 | 미착수 | — |
 | FILE-05 | 전체 공연 녹음 | 4 | 미착수 | — |
-| FILE-06 | 복구와 버전 관리 | 3 | 미착수 | — |
+| FILE-06 | 복구와 버전 관리 | 3 | 부분 구현 | schemaVersion 2와 v1 읽기 이전, PCM/메타데이터/트랙 순서 SHA-256·메모리 검사, 원자적 revision 비교·다른 탭 안내. journal·충돌 버전 별도 보관·실제 검증은 남음 |
 | CLOUD-01 | 선택적 계정과 프로젝트 | 7 | 미착수 | — |
 | CLOUD-02 | 사용자 데이터 보안 | 7 | 미착수 | — |
 | CLOUD-03 | 재시도 가능한 동기화 | 7 | 미착수 | — |
@@ -462,12 +462,62 @@
 - 실제 실행: `npm run lint`, `npm run typecheck`, `NEXT_TELEMETRY_DISABLED=1 npm run build` 성공. `npx react-doctor@latest --verbose --scope changed` 35개 파일, 100/100. `git diff --cached --check` 공백 오류 없음.
 - 단위·E2E·오디오·브라우저·실청취 테스트는 사용자 중단 요청에 따라 미실행. 기능 검증 상태와 다음 로컬 저장 작업은 그대로 유지함.
 
+### 2026-09-23 — 01 트랙 로컬 자동 저장·새로고침 복구 / SYS-02·FILE-02·FILE-06 부분 구현
+
+- 범위: 한 브라우저 origin의 01 트랙 한 세션. 녹음/오버더빙 확정, 오디오 스레드가 적용한 Undo/Redo, 비우기/복구 시 PCM과 현재 편집 이력을 자동 저장함. 중단 후 컨트롤러가 수신한 부분 녹음도 incomplete 상태로 보관하되 자동 반복하지 않음. 루프의 sampleRate·BPM·박자·길이도 함께 복구함.
+- 변경 파일: `src/audio/storage/{loop-session,indexed-db-loop-repository,loop-persistence}.ts`, `src/audio/loop/{loop-history,loop-controller}.ts`, `src/components/studio/{loop-save-status.tsx,loop-save-label.ts,recording-track.tsx}`, `src/components/audio/{audio-engine-provider,audio-setup,transport-controls}.tsx`, `src/app/{page.tsx,globals.css}`, `src/lib/i18n/ko.ts`, `tests/audio/{loop-storage,loop-controller}.test.ts`, `tests/e2e/{local-save,home}.spec.ts`, `README.md`, `docs/PROGRESS.md`.
+- 저장 설계: 새 의존성 없이 단일 세션용 IndexedDB 래퍼를 추가함. DB `loop-station-local` 버전 1의 `heads`와 `sessions`에 현재 리비전 UUID와 제한된 PCM 스냅샷을 보관함. PCM은 JSON/React에 넣지 않고 ArrayBuffer로 보관함. 현재/Undo/Redo/비우기 복구 버퍼를 유지하되 32MiB 예산에서 저장/해시 사본과 재생 버퍼 여유를 검사함. 전체 프로젝트 정규화·청크 에셋 저장 구조는 추후 확장 항목임.
+- 원자성: 쓰기 트랜잭션 전에 형식·음악적 길이·메모리·유한 샘플을 검사하고 PCM과 메타데이터 SHA-256을 준비함. 하나의 readwrite 트랜잭션에서 현재 리비전을 비교하고 PCM·리비전을 함께 교체함. put 요청 성공만으로 저장 완료를 표시하지 않고 transaction complete 이후 확정함. quota/중간 실패/충돌은 이전 저장본을 유지함.
+- 복구: 클라이언트 effect에서 저장소를 초기화하며 SSR/모듈 최상위에서 브라우저 API를 실행하지 않음. 불러오기가 끝날 때까지 편집을 잠그고, 무결성·미래 schemaVersion 오류는 저장본을 덮어쓰지 않고 안내함. 복구 PCM은 메타데이터만 UI에 노출하고 정지 상태로 유지함. 오디오 시작 시 기존 Worklet 복구 경로에 연결하며, 다른 sampleRate로 시작하면 기존 안내대로 변환 재생을 차단함.
+- 저장 상태: 상단 Radix Popover에 불러오는 중/저장 중/저장 완료/불러오기 실패/저장 실패/충돌/메모리 전용을 구분함. 저장 중에는 추가 편집·녹음을 잠깐 막아 버퍼 중첩을 제한하며 이미 재생 중인 오디오는 계속됨. 실패 후 재시도 또는 `저장 없이 계속`을 제공함. 읽기 실패 후 메모리 전용을 선택해도 기존 디스크 데이터를 덮어쓰지 않음. 미확정 녹음·미저장 변경·충돌에는 기존 beforeunload 경고를 유지함.
+- 다중 탭: BroadcastChannel이 있으면 다른 저장을 감지해 편집을 중지하고 안내함. 메시지 지원 여부와 무관하게 실제 쓰기 트랜잭션의 revision 비교가 오래된 저장의 덮어쓰기를 막음. 충돌한 새 연주는 해당 탭 메모리에 유지함. 독점 편집 임대권과 충돌 버전의 별도 영구 보관은 아직 구현하지 않음.
+- UI: 원본 Stitch 콘솔 배치 안에서 기존 미저장 문구를 실제 저장 상태 버튼으로 교체하고, 오디오를 시작하기 전에도 복구된 루프의 BPM·박자를 표시함. 기본 입력 모니터 OFF·사용자 동작 기반 마이크/오디오 시작 정책은 유지함. 빈 트랙의 별도 템포 변경·입력 장치/게인 설정·프로젝트 목록은 이번 저장 범위에 포함하지 않음.
+- 작성한 테스트: 저장 코덱 왕복/PCM·메타데이터 손상/미래 버전/길이/비정상 샘플, 초기 로딩 잠금/중복 초기화, 쓰기 확정 전 상태, 실패 후 동일 base 재시도, 읽기 실패 후 메모리 전용의 덮어쓰기 방지, 충돌, AudioContext 이전 복구의 단위 테스트 10개. 저장 상태 흐름의 repository는 대역이며 IndexedDB 자체 검증을 대신하지 않음. 별도 Chromium E2E 2개는 합성 마이크 실제 녹음→저장→새로고침 후 PCM 해시/메타데이터 비교와 PCM put 이후 head put 실패 주입에 따른 트랜잭션 롤백/이전 루프 복구를 작성함. 모두 미실행이며 통과 여부를 주장하지 않음.
+- 참고: [IndexedDB 기본 흐름과 트랜잭션](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Using_IndexedDB), [트랜잭션 완료 이벤트](https://developer.mozilla.org/en-US/docs/Web/API/IDBTransaction/complete_event).
+
+| 실행 명령/검사 | 실제 결과 |
+|---|---|
+| npm run lint | 성공, 경고 0개 |
+| npm run typecheck | 성공, 신규 단위/E2E 코드 포함 타입 검사 |
+| NEXT_TELEMETRY_DISABLED=1 npm run build | 성공, Worklet 27.4kB 및 /·/_not-found 정적 빌드 |
+| npx react-doctor@latest --verbose --scope changed | 100/100. 신규 미추적 파일 범위 확인을 위해 전체 진단 추가 실행 |
+| npx react-doctor@latest --verbose | 최초 78/100의 4개 경고 확인 후 준비/트랜잭션 분리, 예산 내 중복 없는 병렬 해시, 라벨 모듈 분리, 저장 시각 포맷의 상태 갱신 시점 이동. 최종 전체 49개 파일 100/100, 진단 없음 |
+| git diff --check | 공백 오류 없음 |
+| npm run test / npm run test:e2e / test:audio / 브라우저·실청취 | 사용자 요청에 따라 미실행 |
+
+- 남은 검증/제한: 실제 IndexedDB 저장·복구·quota/blocked/versionchange·다중 탭 경합·브라우저별 권한·장치·청취·모바일 Popover는 미검증. 저장소 정리·비공개 모드 종료·브라우저 강제 종료에 대한 영구 보관은 보장하지 않음. 진행 중 녹음 청크 journal, 프로젝트별 저장, migration, 파일 백업, 다른 sampleRate 변환, navigator.storage.persist 요청 UI는 미구현. SYS-02/FILE-02/FILE-06을 검증 완료로 올리지 않음.
+- 다음 작업: 다중 트랙을 작은 수직 단위로 추가하고 저장 모델을 확장. 사용자 테스트 재개 시 신규 코어/저장 테스트와 실제 IndexedDB E2E부터 검증함.
+- Git: 현재 develop 작업 트리에서 파일만 수정함. 브랜치 생성·스테이징·커밋·푸시·머지를 실행하지 않음.
+
+### 2026-09-23 — 공통 시계의 8트랙 루핑 / LOOP-01·LOOP-02·LOOP-03·FILE-02·FILE-06 부분 구현
+
+- 범위: 기존 01 트랙 엔진을 8개 독립 PCM 트랙으로 확장함. 같은 AudioFrameClock을 한 번만 진행시키며 트랙별 다음 마디 녹음/재생, 4마디 반복, 한 바퀴 오버더빙, Undo/Redo, 비우기/복구를 연결함. 전체 transport 시작/정지는 모든 트랙에 적용됨. 입력은 한 트랙만 녹음하고 다른 트랙의 반복 재생은 유지함.
+- 변경 파일: `src/audio/loop/{station-protocol,pcm-station,station-controller,loop-controller,pcm-loop}.ts`, `src/audio/worklets/test-tone-processor.ts`, `src/audio/engine/test-tone-engine.ts`, `src/audio/storage/{station-session,loop-session,loop-persistence,indexed-db-loop-repository}.ts`, `src/components/audio/{audio-engine-provider,audio-setup}.tsx`, `src/components/audio/use-audio-session.ts`, `src/components/studio/{recording-track,studio-workspace,loop-save-status}.tsx`, `src/components/studio/track-availability.ts`, `src/app/{page.tsx,globals.css}`, `src/lib/i18n/ko.ts`, `tests/audio/{pcm-station,station-controller,station-storage}.test.ts`, `tests/e2e/local-save.spec.ts`, `README.md`, `docs/PROGRESS.md`.
+- 명령/소유권: Worklet 메시지에 trackId를 붙여 sequence·캡처 확인·이력 확인을 해당 트랙에만 전달함. 비동기 용량 확인부터 편집 완료까지 다른 트랙의 녹음/편집을 잠금. 마이크 장치 잠금은 프로젝트가 합산함. 전체 저장 중에도 추가 편집을 차단하며 기존 오디오 루프는 계속됨. 프로젝트 공통 상태와 각 트랙 진행 상태를 분리해 PCM을 React에 넣지 않음.
+- 메모리/출력: 트랙당 기존 32MiB, 프로젝트 전체 128MiB의 보수적인 작업 예산을 적용함. 모든 트랙의 현재/이전/비우기 이력, Worklet 사본, 녹음 버퍼와 저장/해시 사본을 고려하고 IndexedDB 전체 프로젝트 교체에 필요한 공간을 확인함. 8트랙 합산 출력은 −1~1로 제한한 뒤 기존 0.5 게인을 사용함. 캡처/오버더빙 PCM에는 출력 제한을 적용하지 않음. 이는 고정 출력 보호이며 트랙 믹서/음질 검증된 마스터 리미터는 미구현임.
+- 저장/이전: schemaVersion 2로 8개 트랙과 각 이력을 같은 IndexedDB 트랜잭션에 보관함. 기존 DB 버전/키를 유지하여 v1 데이터 읽기 후 01 트랙에 배치함. 읽기만으로 기존 저장본을 수정하지 않고, 다음 확정 변경의 CAS 트랜잭션에서 v2로 교체함. v1 무결성/미래 버전/공통 박자 불일치 실패 시 원본 보존. v2 체크섬은 트랙 순서까지 포함함. 다른 탭 충돌과 저장 실패의 이전 저장본 보존 정책을 유지함.
+- UI: 기존 Stitch/Radix 카드·톤·모바일 Bank를 유지하고 02–08 자리표시자를 실제 녹음 카드로 연결함. 선택한 트랙의 메타데이터, 트랙별 고유 접근성 ID와 다른 트랙 작업 대기 이유를 표시함. 08 전용 자리표시자 CSS를 제거함. 저장 상태는 프로젝트 전체를 가리킴.
+- 제한: 8개 모노·4마디 고정, 한 번에 한 트랙 녹음/편집. 루프 또는 비우기 복구 이력이 있으면 BPM/박자를 고정함. 샘플레이트 불일치 시 다른 빈 트랙 녹음도 차단하여 원본을 보존함. 오래된 v1에 서로 다른 박자의 현재/복구 이력이 함께 있으면 로드를 차단하며 자동 수리는 미구현. 프로젝트 목록/이름/새 프로젝트, 믹서, 길이 선택, 장면과 파일 입출력은 다음 범위임.
+- 작성한 테스트: 새 단위 12개 — 공통 경계 합산/트랙별 정지, 다른 트랙 반복 중 실제 PCM 캡처, 동시 캡처 거절, 합산 출력 제한/다른 BPM 거절, v1 이전/8트랙 이력 왕복/트랙 순서·PCM 손상/형식 거절, 비동기 준비 잠금·취소/잘못된 트랙 응답/원자 저장 대기/샘플레이트 불일치. 저장 E2E를 v2에 맞추고 2트랙 녹음·새로고침 PCM 비교 시나리오 1개 추가함. **모두 작성만 했으며 실행하지 않음.**
+- 검사 중 수정: React Doctor의 UI 분기 복잡도 경고 2건은 작업 가능 상태 계산과 진행 표시 컴포넌트를 분리하여 정리함. 생성 Worklet 린트의 미사용 예산 상수 경고는 상수를 정적 리터럴로 표현해 번들러가 오디오 스레드에서 제거하도록 수정함. 규칙 무시나 테스트 삭제는 하지 않음.
+- 최종 실제 검사: `npm run lint` 성공(생성 Worklet 포함 경고 0개), `npm run typecheck` 성공(신규 단위/E2E 코드 포함), `NEXT_TELEMETRY_DISABLED=1 npm run build` 성공(Worklet 30.1kB, `/`·`/_not-found` 정적 빌드), `npx react-doctor@latest --verbose --scope changed` 100/100, `npx react-doctor@latest --verbose` 전체 57개 파일 100/100, `git diff --check` 공백 오류 없음.
+- 미실행: `npm run test`, `npm run test:audio`, `npm run test:e2e`, 브라우저·실청취는 사용자 중단 요청에 따라 실행하지 않음. 인수 기준을 검증 완료로 올리지 않음.
+- 다음 작업: 트랙별 볼륨·Mute·Solo 믹서. 테스트 재개 시 다중 트랙 PCM/저장 테스트, 실제 Worklet과 브라우저 v1 이전·실패 롤백·장시간 반복·청취부터 확인함.
+- Git: 기존 로컬 저장 작업을 보존하고 develop 작업 트리의 파일만 수정함. 브랜치 생성·스테이징·커밋·푸시·머지를 실행하지 않음.
+
+### 2026-09-23 — 8트랙 프로젝트 커밋·통합 전 확인
+
+- 사용자 요청: 현재까지 커밋·푸시하고 develop에 머지 후 푸시. `git fetch origin` 후 develop과 origin/develop의 차이가 0/0임을 확인하고 기존 변경을 보존한 `feature/multitrack-local-project` 브랜치를 생성함.
+- 커밋 범위: 8트랙 PCM 루핑, 트랙별 편집 이력, IndexedDB 프로젝트 저장·v1 이전, 연결 UI·테스트 코드·문서. 생성 Worklet 번들·환경 파일·진단 산출물은 포함하지 않음.
+- 실제 실행: `npm run lint`, `npm run typecheck`, `NEXT_TELEMETRY_DISABLED=1 npm run build` 성공. `npx react-doctor@latest --verbose` 전체 57개 파일 100/100, 진단 없음. `git diff --check` 공백 오류 없음.
+- 사용자 테스트 중단 요청 유지: 단위·E2E·오디오·브라우저·실청취 테스트는 실행하지 않음. 기존 부분 구현·미검증 상태를 유지함.
+
 ## 알려진 제한과 차단 항목
 
-AudioContext·Worklet·마이크 입력·공통 시계·메트로놈과 01 트랙의 4마디 PCM 녹음·반복·한 바퀴 오버더빙·1단계 Undo/Redo 코드를 구현했지만 실제 Worklet 로딩, 권한, 장치 수명, 녹음/재생 소리와 경계는 확인하지 않았다. 이전 기본 화면의 DOM 배치만 확인했으며 녹음/오버더빙 UI의 브라우저 확인·캡처 비교는 미완료다. 입력은 모노 합산이며 채널 선택, AUTO 모니터링, 연속 여러 바퀴 오버더빙, 다단계 Undo, 다중 트랙, 영구 저장, FX, MIDI, 클라우드는 미구현이다. 녹음은 세션 메모리에만 보관되므로 새로고침하면 사라진다. 새 프로젝트/데모/믹서/FX 버튼은 이유와 함께 비활성화한다.
+AudioContext·Worklet·마이크 입력·공통 시계·메트로놈과 8트랙의 PCM 녹음·반복·오버더빙·Undo/Redo·프로젝트 자동 저장을 구현했지만 실제 Worklet 로딩, 장치 수명, 청취와 경계, IndexedDB 저장/복구·v1 이전은 미검증이다. 새 UI의 브라우저 확인도 미완료다. 모든 트랙은 모노·4마디, 한 번에 한 트랙 녹음/편집으로 제한한다. 채널 선택, AUTO 모니터링, 연속 오버더빙, 다단계 Undo, 믹서, 녹음 journal, 프로젝트 목록, 파일 백업, FX, MIDI, 클라우드는 미구현이다. 저장 실패 또는 메모리 전용 모드의 변경은 탭 종료 시 사라질 수 있다. 새 프로젝트/데모/믹서/FX 버튼은 이유와 함께 비활성화한다.
 
 시간 변환 단위 테스트는 실제 오디오 시계의 동작이나 장시간 동기화를 보장하지 않는다. 실제 마이크·헤드폰·인터페이스 청취 및 Chrome/Edge/Firefox/Safari 지원 범위 검증은 남아 있다.
 
 ## 다음 Codex 작업
 
-사용자가 구현을 요청하면 AGENTS.md와 현재 진행 상태를 읽는다. 모니터링은 기본 OFF로 유지한다. 테스트 재개 요청 전에는 자동·브라우저 테스트를 실행하지 않는다. 재개되면 신규 PCM/오버더빙/이력/컨트롤러 테스트부터 실행하고 production Worklet URL, 실제 녹음·첫 반복·오버더빙·Undo/Redo·예약 취소·정지/재시작·누락 입력·부분 보관·Clear 복구·메모리 및 저장 공간 거절, 입력 게인·클릭 분리·Context 수명·마이크 권한을 실제 브라우저와 장치에서 검증한다. 그 전에는 Phase 0/1/2와 CLK/LOOP 인수 기준을 검증 완료로 표시하지 않는다. 다음 기능은 확정한 루프의 IndexedDB 로컬 저장이다.
+사용자가 구현을 요청하면 AGENTS.md와 현재 진행 상태를 읽는다. 다음 기능은 트랙별 볼륨·Mute·Solo 믹서다. 모니터링은 기본 OFF로 유지하고 테스트 재개 요청 전에는 자동·브라우저 테스트를 실행하지 않는다. 재개되면 PCM/오버더빙/이력/저장 및 새 다중 트랙 단위 테스트와 local-save.spec.ts부터 실행한다. 실제 Worklet·8트랙 반복/녹음·Undo/Redo·새로고침·v1 이전·실패 롤백·다중 탭·Context/장치 수명과 청취 검증이 필요하다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 저장 형식을 바꿀 때는 schemaVersion 1/2 데이터를 보존한다.

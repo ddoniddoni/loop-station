@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Card, Heading, Text } from "@radix-ui/themes";
+import { Badge, Button, Heading, Text } from "@radix-ui/themes";
 import { useState } from "react";
 import { EnvironmentDiagnostics } from "@/components/audio/environment-diagnostics";
 import { StudioInputPanel } from "@/components/studio/studio-input-panel";
@@ -17,7 +17,7 @@ const trackSlots = [
   { number: "05", name: "Perc", tone: "mint" },
   { number: "06", name: "Harmony", tone: "muted" },
   { number: "07", name: "FX Loop", tone: "mint" },
-  { number: "08", name: "Empty Track", tone: "muted" },
+  { number: "08", name: "Texture", tone: "muted" },
 ] as const;
 type TrackSlot = (typeof trackSlots)[number];
 
@@ -39,37 +39,13 @@ function LibraryPanel() {
   );
 }
 
-function TrackCard({ slot, selected, onSelect }: { slot: TrackSlot; selected: boolean; onSelect: () => void }) {
-  const emptySlot = slot.number === "08";
-  return (
-    <Card size="1" asChild>
-      <article className="station-track-card" data-tone={slot.tone} data-track={slot.number} data-selected={selected} data-bank={Number(slot.number) <= 4 ? 0 : 1} aria-label={`${slot.number} ${slot.name}: ${ko.studioTrackIdle}`}>
-        <div className="station-track-header">
-          <Heading as="h3" size="3"><button type="button" className="station-track-select" aria-pressed={selected} aria-label={`${slot.number} ${slot.name} 트랙 선택`} onClick={onSelect}><i aria-hidden="true" /><span><b>{slot.number}</b> {slot.name}</span></button></Heading>
-          <span className="station-track-state">EMPTY</span>
-        </div>
-        <div className="station-track-window" aria-label="녹음된 오디오 없음"><StudioIcon name={emptySlot ? "plus" : "loop"} size={emptySlot ? 28 : 18} /><Text as="p" size="1">{emptySlot ? "새 루프를 위한 빈 트랙" : "녹음된 루프 없음"}</Text></div>
-        <div className="station-track-tools" aria-label={ko.studioTrackTools}>
-          <Button type="button" variant="outline" color="gray" disabled aria-describedby="availability" aria-label={`${slot.number} ${ko.studioMute}`}><span className="station-tool-short">M</span><span className="station-tool-long">MUTE</span></Button>
-          <Button type="button" variant="outline" color="gray" disabled aria-describedby="availability" aria-label={`${slot.number} ${ko.studioSolo}`}><span className="station-tool-short">S</span><span className="station-tool-long">SOLO</span></Button>
-          <Button type="button" variant="outline" color="gray" disabled aria-describedby="availability" aria-label={`${slot.number} ${ko.studioUndo}`}><StudioIcon name="undo" size={14} /><span className="station-tool-long">UNDO</span></Button>
-          <span className="station-track-vol" aria-hidden="true">VOL <i /></span>
-          <Button type="button" className="station-track-stop" variant="outline" color="gray" disabled aria-describedby="availability" aria-label={`${slot.number} 트랙 정지`}><StudioIcon name="stop" size={13} /><span className="station-tool-long">STOP</span></Button>
-        </div>
-        <Button type="button" variant="outline" disabled aria-describedby="availability" className="station-track-action"><span className="station-record-dot" aria-hidden="true" /><span>[ RECORD NEW LOOP ]<small>녹음 준비 중</small></span></Button>
-      </article>
-    </Card>
-  );
-}
-
 function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: TrackSlot; onSelect: (slot: TrackSlot) => void; bank: number; onBankChange: (bank: number) => void }) {
   return (
     <section id="tracks" tabIndex={-1} className="station-track-board" data-bank={bank} aria-labelledby="tracks-title">
       <Heading as="h2" id="tracks-title" className="sr-only">{ko.studioTracksTitle}</Heading>
       <div className="station-bank-switch"><Button variant="outline" color="gray" aria-pressed={bank === 0} onClick={() => onBankChange(0)}>Bank 1–4</Button><Button variant="outline" color="gray" aria-pressed={bank === 1} onClick={() => onBankChange(1)}>Bank 5–8</Button><span>8 TRACKS</span></div>
-      <div className="station-track-grid">{trackSlots.map((slot) => slot.number === "01"
-        ? <RecordingTrack key={slot.number} selected={selected === slot} onSelect={() => onSelect(slot)} />
-        : <TrackCard key={slot.number} slot={slot} selected={selected === slot} onSelect={() => onSelect(slot)} />)}</div>
+      <div className="station-track-grid">{trackSlots.map((slot, trackId) =>
+        <RecordingTrack key={slot.number} trackId={trackId} name={slot.name} tone={slot.tone} selected={selected === slot} onSelect={() => onSelect(slot)} />)}</div>
     </section>
   );
 }
@@ -77,10 +53,10 @@ function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: Trac
 function InspectorPanel({ selected }: { selected: TrackSlot }) {
   return (
     <aside id="settings" tabIndex={-1} className="station-inspector" aria-labelledby="inspector-title" data-tone={selected.tone}>
-      <div className="station-inspector-head"><Text as="p" className="station-overline">FOCUSED TRACK</Text><Heading as="h2" id="inspector-title" size="4">Track {selected.number} – {selected.name}</Heading><Badge variant="outline" color="gray">{selected.number === "01" ? "4마디 녹음 트랙" : "비어 있음"}</Badge></div>
+      <div className="station-inspector-head"><Text as="p" className="station-overline">FOCUSED TRACK</Text><Heading as="h2" id="inspector-title" size="4">Track {selected.number} – {selected.name}</Heading><Badge variant="outline" color="gray">4 BARS</Badge></div>
       <section className="station-inspector-section station-clip-settings" aria-labelledby="clip-settings-title">
         <Heading as="h3" id="clip-settings-title" size="2">CLIP SETTINGS</Heading>
-        {selected.number === "01" ? <RecordedClipDetails /> : <><div className="station-clip-fields"><div><span>LOOP MODE</span><strong>—</strong></div><div><span>LENGTH</span><strong>—</strong></div></div><Text as="p" size="1" color="gray" mt="2">{ko.studioNoClip}</Text></>}
+        <RecordedClipDetails trackId={Number(selected.number) - 1} />
         <div className="station-speed-controls">{["REV", "0.5x", "1x", "2x"].map((label) => <Button key={label} variant="outline" color="gray" disabled aria-describedby="availability">{label}</Button>)}</div>
       </section>
       <StudioInputPanel />

@@ -1,6 +1,6 @@
 import { isTransportSnapshot, type TransportConfig, type TransportSnapshot } from "../transport/audio-frame-clock";
 import type { MicrophoneController } from "../input/microphone-controller";
-import type { LoopController } from "../loop/loop-controller";
+import type { StationController } from "../loop/station-controller";
 
 type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
@@ -41,7 +41,7 @@ export class TestToneEngine {
     this.callbacks.onContextStateChange(this.context.state);
   };
 
-  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController, private readonly loop: LoopController) {
+  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController, private readonly loop: StationController) {
     if (!window.isSecureContext) {
       throw new AudioSetupError("insecure-context");
     }

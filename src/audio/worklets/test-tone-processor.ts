@@ -1,6 +1,6 @@
 import { ClickVoice } from "../metronome/click-voice";
 import { InputLevelMeter } from "../input/input-meter";
-import { PcmLoop } from "../loop/pcm-loop";
+import { PcmStation } from "../loop/pcm-station";
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { PPQ } from "../transport/timing";
 
@@ -17,7 +17,7 @@ declare class AudioWorkletProcessor {
 class TestToneProcessor extends AudioWorkletProcessor {
   private readonly clock = new AudioFrameClock(sampleRate);
   private readonly click = new ClickVoice(sampleRate);
-  private readonly loop = new PcmLoop(this.clock, sampleRate, this.port);
+  private readonly loop = new PcmStation(this.clock, sampleRate, this.port);
   private blockFrames = 0;
   private phase = 0;
   private level = 0;
