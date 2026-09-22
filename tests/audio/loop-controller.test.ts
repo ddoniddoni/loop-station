@@ -2,12 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MicrophoneController } from "../../src/audio/input/microphone-controller";
 import { LoopController } from "../../src/audio/loop/loop-controller";
 import { recordingCapacity, type CaptureMode, type LoopMetadata } from "../../src/audio/loop/loop-protocol";
+import type { LoopRepository } from "../../src/audio/storage/loop-session";
 
-function fixture(bpm = 120) {
+function fixture(bpm = 120, repository: LoopRepository | null = null) {
   const input = new MicrophoneController();
   const inputState = { ...input.getSnapshot(), phase: "active" as const, routed: true };
   vi.spyOn(input, "getSnapshot").mockReturnValue(inputState);
-  const controller = new LoopController(input);
+  const controller = new LoopController(input, repository);
   const messages: { type: string; sequence: number }[] = [];
   const port = { postMessage(value: { type: string; sequence: number }, transfer: Transferable[] = []) {
     messages.push(structuredClone(value, { transfer }));
@@ -43,7 +44,8 @@ describe("loop command acknowledgements and preflight", () => {
   it("keeps capture locked across stale status messages and cancels an unresolved preflight", async () => {
     let resolveEstimate: (estimate: StorageEstimate) => void = () => { throw new Error("No pending estimate"); };
     vi.stubGlobal("navigator", { storage: { estimate: () => new Promise<StorageEstimate>((resolve) => { resolveEstimate = resolve; }) } });
-    const f = fixture();
+    const f = fixture(120, { load: async () => null, save: async () => { throw new Error("Unexpected save"); } });
+    await f.controller.initializeStorage();
     const pending = f.controller.record();
     f.status(0, "empty");
     expect(f.controller.getSnapshot().phase).toBe("preparing");

@@ -1,5 +1,6 @@
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { ticksPerBar } from "../transport/timing";
+import { sameTempo } from "./station-protocol";
 import { isLoopMetadata, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type LoopMetadata, type LoopPhase } from "./loop-protocol";
 
 type OverdubPass = {
@@ -35,6 +36,13 @@ export class PcmLoop {
 
   get locked(): boolean { return this.pcm !== null; }
   get capturing(): boolean { return this.overdub !== null || this.phase === "armed" || this.phase === "recording"; }
+
+  reject(sequence: number, issue: string): void {
+    if (!Number.isSafeInteger(sequence) || sequence <= this.sequence) return;
+    this.sequence = sequence;
+    this.issue = issue;
+    this.dirty = true;
+  }
 
   handle(value: unknown, blockFrames: number, inputActive: boolean): void {
     if (typeof value !== "object" || value === null || !("type" in value) || typeof value.type !== "string" || !value.type.startsWith("loop-")) return;
@@ -145,7 +153,7 @@ export class PcmLoop {
     this.written = meta.frames;
     this.position = 0;
     this.phase = meta.complete ? "stopped" : "incomplete";
-    this.clock.configure(meta);
+    if (!sameTempo(this.clock.meter, meta)) this.clock.configure(meta);
   }
 
   private clear(): void {

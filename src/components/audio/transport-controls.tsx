@@ -11,6 +11,7 @@ type TransportControlsProps = {
   enabled: boolean;
   settingsLocked: boolean;
   snapshot: TransportSnapshot | null;
+  savedConfig: TransportConfig | null;
   onStart: () => void;
   onStop: () => void;
   onReset: () => void;
@@ -27,7 +28,7 @@ function positionParts(snapshot: TransportSnapshot | null): { bar: string; beat:
   return { bar: String(bar), beat: String(beat) };
 }
 
-export function TransportControls({ enabled, settingsLocked, snapshot, onStart, onStop, onReset, onConfigure }: TransportControlsProps) {
+export function TransportControls({ enabled, settingsLocked, snapshot, savedConfig, onStart, onStop, onReset, onConfigure }: TransportControlsProps) {
   const ready = enabled && snapshot !== null;
   const position = positionParts(snapshot);
 
@@ -41,16 +42,17 @@ export function TransportControls({ enabled, settingsLocked, snapshot, onStart, 
         <span className="station-counter-caption">TRANSPORT COUNTER</span>
         <div><span>BAR</span><output aria-live="off" aria-label={`${position.bar} ${ko.studioBar}`}>{position.bar}</output><span className="station-counter-divider" aria-hidden="true">|</span><span>BEAT</span><output aria-live="off" aria-label={`${position.beat} ${ko.studioBeat}`}>{position.beat}</output><i data-playing={snapshot?.playing ?? false} aria-hidden="true" /></div>
       </div>
-      <TransportSettings enabled={enabled} settingsLocked={settingsLocked} snapshot={snapshot} onReset={onReset} onConfigure={onConfigure} />
+      <TransportSettings enabled={enabled} settingsLocked={settingsLocked} snapshot={snapshot} savedConfig={savedConfig} onReset={onReset} onConfigure={onConfigure} />
     </section>
   );
 }
 
-function TransportSettings({ enabled, settingsLocked, snapshot, onReset, onConfigure }: Pick<TransportControlsProps, "enabled" | "settingsLocked" | "snapshot" | "onReset" | "onConfigure">) {
+function TransportSettings({ enabled, settingsLocked, snapshot, savedConfig, onReset, onConfigure }: Pick<TransportControlsProps, "enabled" | "settingsLocked" | "snapshot" | "savedConfig" | "onReset" | "onConfigure">) {
   const [draftBpm, setDraftBpm] = useState("120");
   const [draftMeter, setDraftMeter] = useState("4/4");
   const [issue, setIssue] = useState<string | null>(null);
   const ready = enabled && snapshot !== null;
+  const displayConfig = snapshot ?? savedConfig;
 
   function applySettings(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -69,7 +71,7 @@ function TransportSettings({ enabled, settingsLocked, snapshot, onReset, onConfi
       <Popover.Root>
         <Popover.Trigger>
           <Button type="button" variant="outline" color="gray" className="station-tempo-trigger" aria-label="템포와 박자 설정">
-            <span><strong>{snapshot?.bpm.toFixed(1) ?? "120.0"}</strong><small>BPM / {snapshot ? `${snapshot.numerator}/${snapshot.denominator}` : "4/4"}</small></span><StudioIcon name="settings" size={16} />
+            <span><strong>{displayConfig?.bpm.toFixed(1) ?? "120.0"}</strong><small>BPM / {displayConfig ? `${displayConfig.numerator}/${displayConfig.denominator}` : "4/4"}</small></span><StudioIcon name="settings" size={16} />
           </Button>
         </Popover.Trigger>
         <Popover.Content className="station-overlay" width="300" sideOffset={8}>
@@ -89,7 +91,7 @@ function TransportSettings({ enabled, settingsLocked, snapshot, onReset, onConfi
             </div>
             <Button type="submit" variant="outline" disabled={!ready || settingsLocked}>{ko.transportApply}</Button>
           </form>
-          {settingsLocked && <Text as="p" size="2" color="gray" mt="2">녹음 또는 루프가 있는 동안 BPM·박자표는 고정됩니다. 트랙을 비우면 변경할 수 있습니다.</Text>}
+          {settingsLocked && <Text as="p" size="2" color="gray" mt="2">루프가 있거나 녹음·저장소 작업 중에는 BPM·박자표가 고정됩니다.</Text>}
           <Button type="button" variant="soft" color="gray" mt="3" disabled={!ready || (snapshot?.positionFrame === 0 && !snapshot?.playing)} onClick={onReset}><StudioIcon name="undo" size={16} />{ko.transportReset}</Button>
           <Text as="p" size="2" color="gray" mt="3">{snapshot ? `${ko.transportCurrentSetting} ${snapshot.bpm} BPM · ${snapshot.numerator}/${snapshot.denominator}` : ko.transportNeedsAudio}</Text>
           {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
