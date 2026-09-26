@@ -1,8 +1,9 @@
 "use client";
 
-import { Button, Heading, Popover, Select, Text, TextField } from "@radix-ui/themes";
+import { Button, Flex, Heading, Popover, Select, Text, TextField } from "@radix-ui/themes";
 import { useState, type FormEvent } from "react";
 import { TRANSPORT_METERS, type TransportConfig, type TransportSnapshot } from "@/audio/transport/audio-frame-clock";
+import { TapTempo, type TapTempoResult } from "@/audio/transport/tap-tempo";
 import { PPQ, ticksPerBar } from "@/audio/transport/timing";
 import { ko } from "@/lib/i18n/ko";
 import { StudioIcon } from "@/components/ui/studio-icon";
@@ -48,27 +49,12 @@ export function TransportControls({ enabled, settingsLocked, snapshot, savedConf
 }
 
 function TransportSettings({ enabled, settingsLocked, snapshot, savedConfig, onReset, onConfigure }: Pick<TransportControlsProps, "enabled" | "settingsLocked" | "snapshot" | "savedConfig" | "onReset" | "onConfigure">) {
-  const [draftBpm, setDraftBpm] = useState("120");
-  const [draftMeter, setDraftMeter] = useState("4/4");
-  const [issue, setIssue] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const ready = enabled && snapshot !== null;
   const displayConfig = snapshot ?? savedConfig;
 
-  function applySettings(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    if (settingsLocked) return;
-    const bpm = Number(draftBpm);
-    const meter = TRANSPORT_METERS.find(({ label }) => label === draftMeter);
-    if (!Number.isInteger(bpm) || bpm < 40 || bpm > 240 || !meter) {
-      setIssue(ko.transportInvalidTempo);
-      return;
-    }
-    setIssue(null);
-    onConfigure({ bpm, numerator: meter.numerator, denominator: meter.denominator });
-  }
-
   return (
-      <Popover.Root>
+      <Popover.Root open={open} onOpenChange={setOpen}>
         <Popover.Trigger>
           <Button type="button" variant="outline" color="gray" className="station-tempo-trigger" aria-label="템포와 박자 설정">
             <span><strong>{displayConfig?.bpm.toFixed(1) ?? "120.0"}</strong><small>BPM / {displayConfig ? `${displayConfig.numerator}/${displayConfig.denominator}` : "4/4"}</small></span><StudioIcon name="settings" size={16} />
@@ -76,26 +62,90 @@ function TransportSettings({ enabled, settingsLocked, snapshot, savedConfig, onR
         </Popover.Trigger>
         <Popover.Content className="station-overlay" width="300" sideOffset={8}>
           <Heading as="h2" size="3">{ko.transportTitle}</Heading>
-          <form onSubmit={applySettings} className="station-tempo-form">
-            <div className="station-tempo-field">
-              <label htmlFor="transport-bpm">{ko.transportTempoLabel}</label>
-              <TextField.Root id="transport-bpm" type="number" min="40" max="240" step="1" inputMode="numeric"
-                value={draftBpm} disabled={!ready || settingsLocked} onChange={(event) => setDraftBpm(event.target.value)} />
-            </div>
-            <div className="station-tempo-field">
-              <label htmlFor="transport-meter">{ko.transportMeter}</label>
-              <Select.Root value={draftMeter} disabled={!ready || settingsLocked} onValueChange={setDraftMeter}>
-                <Select.Trigger id="transport-meter" aria-label={ko.transportMeter} />
-                <Select.Content position="popper">{TRANSPORT_METERS.map((meter) => <Select.Item key={meter.label} value={meter.label}>{meter.label}</Select.Item>)}</Select.Content>
-              </Select.Root>
-            </div>
-            <Button type="submit" variant="outline" disabled={!ready || settingsLocked}>{ko.transportApply}</Button>
-          </form>
-          {settingsLocked && <Text as="p" size="2" color="gray" mt="2">루프가 있거나 녹음·저장소 작업 중에는 BPM·박자표가 고정됩니다.</Text>}
+          {open && <TransportSettingsForm key={`${ready}:${settingsLocked}`} ready={ready} settingsLocked={settingsLocked}
+            initialConfig={displayConfig} onConfigure={onConfigure} />}
           <Button type="button" variant="soft" color="gray" mt="3" disabled={!ready || (snapshot?.positionFrame === 0 && !snapshot?.playing)} onClick={onReset}><StudioIcon name="undo" size={16} />{ko.transportReset}</Button>
           <Text as="p" size="2" color="gray" mt="3">{snapshot ? `${ko.transportCurrentSetting} ${snapshot.bpm} BPM · ${snapshot.numerator}/${snapshot.denominator}` : ko.transportNeedsAudio}</Text>
-          {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
         </Popover.Content>
       </Popover.Root>
   );
+}
+
+function tapStatus(result: TapTempoResult): string {
+  switch (result.status) {
+    case "idle": return ko.tapTempoIdle;
+    case "waiting": return ko.tapTempoWaiting;
+    case "restarted": return ko.tapTempoRestarted;
+    case "too-fast": return ko.tapTempoTooFast;
+    case "invalid": return ko.tapTempoInvalid;
+    case "ready": return `제안 · ${result.bpm} BPM · 최근 ${result.intervals}개 간격 · 설정 적용 전`;
+  }
+}
+
+function TransportSettingsForm({ ready, settingsLocked, initialConfig, onConfigure }: {
+  ready: boolean;
+  settingsLocked: boolean;
+  initialConfig: TransportConfig | null;
+  onConfigure: (config: TransportConfig) => void;
+}) {
+  const [draftBpm, setDraftBpm] = useState(() => String(initialConfig?.bpm ?? 120));
+  const [draftMeter, setDraftMeter] = useState(() => initialConfig ? `${initialConfig.numerator}/${initialConfig.denominator}` : "4/4");
+  const [issue, setIssue] = useState<string | null>(null);
+  const [tapTempo] = useState(() => new TapTempo());
+  const [tapResult, setTapResult] = useState<TapTempoResult>({ status: "idle", bpm: null, intervals: 0 });
+  const disabled = !ready || settingsLocked;
+  const disabledReason = settingsLocked ? ko.transportSettingsLocked : !ready ? ko.transportNeedsAudio : null;
+
+  function applySettings(event: FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    if (disabled) return;
+    const bpm = Number(draftBpm);
+    const meter = TRANSPORT_METERS.find(({ label }) => label === draftMeter);
+    if (!Number.isInteger(bpm) || bpm < 40 || bpm > 240 || !meter) {
+      setIssue(ko.transportInvalidTempo);
+      return;
+    }
+    setIssue(null);
+    setTapResult(tapTempo.reset());
+    onConfigure({ bpm, numerator: meter.numerator, denominator: meter.denominator });
+  }
+
+  function tap(timestamp: number): void {
+    if (disabled) return;
+    const result = tapTempo.tap(timestamp);
+    setTapResult(result);
+    if (result.status === "ready" && result.bpm !== null) {
+      setDraftBpm(String(result.bpm));
+      setIssue(null);
+    }
+  }
+
+  return <>
+    <form onSubmit={applySettings} className="station-tempo-form">
+      <div className="station-tempo-field">
+        <label htmlFor="transport-bpm">{ko.transportTempoLabel}</label>
+        <TextField.Root id="transport-bpm" type="number" min="40" max="240" step="1" inputMode="numeric"
+          value={draftBpm} disabled={disabled} onChange={(event) => {
+            setDraftBpm(event.target.value); setTapResult(tapTempo.reset()); setIssue(null);
+          }} />
+      </div>
+      <div className="station-tempo-field">
+        <label htmlFor="transport-meter">{ko.transportMeter}</label>
+        <Select.Root value={draftMeter} disabled={disabled} onValueChange={setDraftMeter}>
+          <Select.Trigger id="transport-meter" aria-label={ko.transportMeter} />
+          <Select.Content position="popper">{TRANSPORT_METERS.map((meter) => <Select.Item key={meter.label} value={meter.label}>{meter.label}</Select.Item>)}</Select.Content>
+        </Select.Root>
+      </div>
+      <Flex direction="column" gap="2" width="100%">
+        <Button type="button" variant="soft" size="3" disabled={disabled} aria-describedby="tap-tempo-help tap-tempo-status"
+          onClick={(event) => tap(event.timeStamp)} onKeyDown={(event) => {
+            if (event.repeat && (event.key === "Enter" || event.key === " ")) event.preventDefault();
+          }}>{ko.tapTempoButton}</Button>
+        <Text as="p" id="tap-tempo-help" size="1" color="gray">{ko.tapTempoHelp}</Text>
+        <Text as="p" id="tap-tempo-status" size="1" color="gray" role="status">{disabledReason ?? tapStatus(tapResult)}</Text>
+      </Flex>
+      <Button type="submit" variant="outline" disabled={disabled}>{ko.transportApply}</Button>
+    </form>
+    {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
+  </>;
 }
