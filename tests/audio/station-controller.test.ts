@@ -24,7 +24,7 @@ function fixture(repository: SessionRepository<StationProject> | null = null, ra
   function captured(trackId: number, sequence: number) {
     station.accept({ type: "loop-captured", trackId, sequence, captureMode: "record", metadata,
       pcm: new Float32Array(recordingCapacity(8000, config)).fill(0.25).buffer });
-    station.accept({ type: "loop-status", trackId, sequence, phase: "playing", captureMode: null,
+    station.accept({ type: "loop-status", trackId, sequence, phase: "playing", captureMode: null, countInRemaining: null,
       recordedFrames: 64000, totalFrames: 64000, position: 0, pendingPlay: false, issue: null });
   }
   return { station, input, messages, captured };
@@ -32,6 +32,20 @@ function fixture(repository: SessionRepository<StationProject> | null = null, ra
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("project-wide coordination", () => {
+  it("keeps other tracks and input settings locked throughout count-in", async () => {
+    const f = fixture(); await f.station.tracks[0].record();
+    const sequence = f.messages.at(-1)!.sequence;
+    f.station.accept({ type: "loop-status", trackId: 0, sequence, phase: "count-in", captureMode: "record",
+      countInRemaining: 4, recordedFrames: 0, totalFrames: 64000, position: 0, pendingPlay: false, issue: null });
+    expect(f.station.getSnapshot()).toMatchObject({ performing: true, locked: true });
+    expect(f.station.tracks[1].getSnapshot().blockedByTrack).toBe(0);
+    await f.station.tracks[1].record(false);
+    expect(f.messages).toHaveLength(1);
+    f.station.tracks[0].cancel();
+    expect(f.station.getSnapshot().performing).toBe(false);
+    expect(f.station.tracks[1].getSnapshot().blockedByTrack).toBeNull();
+  });
+
   it("locks other captures, isolates a foreign acknowledgement, then releases the next track", async () => {
     const f = fixture();
     await f.station.tracks[0].record();

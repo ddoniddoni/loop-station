@@ -19,6 +19,7 @@ export class PcmStation {
   /** Current stereo frame; reused instead of allocating a pair per sample. */
   left = 0;
   right = 0;
+  countingIn = false;
   constructor(private readonly clock: AudioFrameClock, rate: number,
     private readonly port: { postMessage(message: unknown, transfer?: Transferable[]): void }) {
     this.mixer = new TrackMixer(rate);
@@ -66,9 +67,11 @@ export class PcmStation {
   nextSample(input: number | undefined, frame: number): number {
     let left = 0;
     let right = 0;
+    this.countingIn = false;
     for (let index = 0; index < this.tracks.length; index += 1) {
       // Always advance PCM/capture state; mute and solo affect playback gain only.
       const sample = this.tracks[index].nextSample(input, frame);
+      if (this.tracks[index].countingIn) this.countingIn = true;
       const trackLeft = sample * this.mixer.nextGain(index * 2);
       const trackRight = sample * this.mixer.nextGain(index * 2 + 1);
       left += trackLeft;

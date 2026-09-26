@@ -26,6 +26,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
   const [transport, setTransport] = useState<TransportSnapshot | null>(null);
   const [metronomeEnabled, setMetronomeEnabled] = useState<boolean | null>(null);
   const [metronomeVolume, setMetronomeVolume] = useState(50);
+  const [countInEnabled, setCountInEnabled] = useState(true);
   const [issue, setIssue] = useState<string | null>(null);
 
   useEffect(() => () => {
@@ -147,7 +148,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
   }
 
   return {
-    phase, sampleRate, transport, metronomeEnabled, metronomeVolume, issue,
+    phase, sampleRate, transport, metronomeEnabled, metronomeVolume, countInEnabled, issue,
     startAudio, stopAudio, resumeAudio,
     startTone: () => engineRef.current?.startTone(),
     stopTone: () => engineRef.current?.stopTone(),
@@ -156,6 +157,9 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
     resetTransport: () => engineRef.current?.resetTransport(),
     configureTransport: (config: TransportConfig) => engineRef.current?.configureTransport(config),
     setMetronomeEnabled: (enabled: boolean) => engineRef.current?.setMetronomeEnabled(enabled),
+    setCountInEnabled: (enabled: boolean) => {
+      if (!loop.getSnapshot().performing) setCountInEnabled(enabled);
+    },
     setMetronomeVolume: (volume: number) => {
       engineRef.current?.setMetronomeVolume(volume);
       setMetronomeVolume(volume);

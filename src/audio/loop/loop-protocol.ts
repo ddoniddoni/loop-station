@@ -5,7 +5,7 @@ export const RECORD_BARS = 4;
 export const MAX_RECORD_SECONDS = 60;
 export const LOOP_MEMORY_BYTES = 32 * 1024 * 1024;
 export type CaptureMode = "record" | "overdub";
-export type LoopPhase = "empty" | "preparing" | "armed" | "recording" | "overdubbing" | "playing" | "stopped" | "incomplete";
+export type LoopPhase = "empty" | "preparing" | "armed" | "count-in" | "recording" | "overdubbing" | "playing" | "stopped" | "incomplete";
 export type LoopMetadata = TransportConfig & { sampleRate: number; frames: number; ticks: number; complete: boolean };
 export type LoopStatus = {
   type: "loop-status";
@@ -16,6 +16,7 @@ export type LoopStatus = {
   position: number;
   pendingPlay: boolean;
   captureMode: CaptureMode | null;
+  countInRemaining: number | null;
   issue: string | null;
 };
 
@@ -38,7 +39,10 @@ export function isLoopStatus(value: unknown): value is LoopStatus {
   if (typeof value !== "object" || value === null) return false;
   return "type" in value && value.type === "loop-status"
     && "sequence" in value && typeof value.sequence === "number" && Number.isSafeInteger(value.sequence) && value.sequence >= 0
-    && "phase" in value && ["empty", "armed", "recording", "overdubbing", "playing", "stopped", "incomplete"].includes(String(value.phase))
+    && "phase" in value && ["empty", "armed", "count-in", "recording", "overdubbing", "playing", "stopped", "incomplete"].includes(String(value.phase))
+    && "countInRemaining" in value && (value.phase === "count-in"
+      ? typeof value.countInRemaining === "number" && Number.isInteger(value.countInRemaining) && value.countInRemaining >= 1 && value.countInRemaining <= 7
+      : value.countInRemaining === null)
     && "recordedFrames" in value && typeof value.recordedFrames === "number" && Number.isSafeInteger(value.recordedFrames) && value.recordedFrames >= 0
     && "totalFrames" in value && typeof value.totalFrames === "number" && Number.isSafeInteger(value.totalFrames) && value.totalFrames >= value.recordedFrames
     && "position" in value && typeof value.position === "number" && Number.isFinite(value.position) && value.position >= 0 && value.position <= 1

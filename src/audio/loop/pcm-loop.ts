@@ -1,5 +1,5 @@
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
-import { ticksPerBar } from "../transport/timing";
+import { PPQ, ticksPerBar } from "../transport/timing";
 import { sameTempo } from "./station-protocol";
 import { isLoopMetadata, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type LoopMetadata, type LoopPhase } from "./loop-protocol";
 
@@ -19,6 +19,8 @@ export class PcmLoop {
   private captureSequence = 0;
   private startFrame = 0;
   private startTick = 0;
+  private countInTick: number | null = null;
+  private countInRemaining = 0;
   private written = 0;
   private playTick = 0;
   private cycle = 0;
@@ -35,7 +37,8 @@ export class PcmLoop {
     private readonly port: { postMessage(message: unknown, transfer?: Transferable[]): void }) {}
 
   get locked(): boolean { return this.pcm !== null; }
-  get capturing(): boolean { return this.overdub !== null || this.phase === "armed" || this.phase === "recording"; }
+  get capturing(): boolean { return this.overdub !== null || this.phase === "armed" || this.phase === "count-in" || this.phase === "recording"; }
+  get countingIn(): boolean { return this.phase === "count-in"; }
 
   reject(sequence: number, issue: string): void {
     if (!Number.isSafeInteger(sequence) || sequence <= this.sequence) return;
@@ -68,7 +71,7 @@ export class PcmLoop {
   }
 
   private prepare(value: object, blockFrames: number, inputActive: boolean): void {
-    if (this.locked || this.revision || blockFrames <= 0 || !inputActive || !("config" in value) || !isTransportConfig(value.config)
+    if (this.locked || this.revision || blockFrames <= 0 || !inputActive || ("countIn" in value && typeof value.countIn !== "boolean") || !("config" in value) || !isTransportConfig(value.config)
       || !("pcm" in value) || !(value.pcm instanceof ArrayBuffer) || !("archive" in value) || !(value.archive instanceof ArrayBuffer)) {
       this.issue = "녹음을 시작할 수 없습니다. 오디오와 마이크 연결을 확인하세요.";
       return;
@@ -84,6 +87,9 @@ export class PcmLoop {
     this.clock.start();
     this.captureSequence = this.sequence;
     this.startTick = this.nextBar(blockFrames);
+    this.countInTick = "countIn" in value && value.countIn === true ? this.startTick : null;
+    this.countInRemaining = 0;
+    if (this.countInTick !== null) this.startTick += ticksPerBar(config.numerator, config.denominator);
     this.startFrame = this.clock.frameAtTick(this.startTick);
     const ticks = ticksPerBar(config.numerator, config.denominator) * RECORD_BARS;
     const frames = this.clock.frameAtTick(this.startTick + ticks) - this.startFrame;
@@ -164,6 +170,8 @@ export class PcmLoop {
     this.metadata = null;
     this.written = 0;
     this.phase = "empty";
+    this.countInTick = null;
+    this.countInRemaining = 0;
     this.pendingPlay = false;
     this.position = 0;
   }
@@ -177,9 +185,11 @@ export class PcmLoop {
   nextSample(input: number | undefined, frame: number): number {
     if (this.revision && frame >= this.revision.frame) this.applyRevision();
     if (!this.clock.playing || !this.pcm || !this.metadata) return 0;
+    if (!this.overdub && this.capturing && (input === undefined || !Number.isFinite(input))) { this.interrupt(); return 0; }
+    this.advanceCountIn(frame);
     if (!this.overdub && this.capturing && frame >= this.startFrame) {
-      if (input === undefined || !Number.isFinite(input)) { this.interrupt(); return 0; }
-      if (this.phase === "armed") { this.phase = "recording"; this.dirty = true; }
+      if (input === undefined) return 0;
+      if (this.phase !== "recording") { this.phase = "recording"; this.countInRemaining = 0; this.dirty = true; }
       this.pcm[this.written] = input;
       if (this.archive) this.archive[this.written] = input;
       this.written += 1;
@@ -208,6 +218,21 @@ export class PcmLoop {
     this.writeOverdub(input, frame, previous);
     // The current input is heard only through the separate monitor path.
     return previous;
+  }
+
+  private advanceCountIn(frame: number): void {
+    if (this.countInTick === null || frame >= this.startFrame || (this.phase !== "armed" && this.phase !== "count-in")) return;
+    if (frame < this.clock.frameAtTick(this.countInTick)) return;
+    if (this.phase === "armed") {
+      this.phase = "count-in";
+      this.countInRemaining = this.clock.meter.numerator;
+      this.dirty = true;
+    }
+    const beatTicks = PPQ * 4 / this.clock.meter.denominator;
+    while (this.countInRemaining > 1 && frame >= this.clock.frameAtTick(this.countInTick + (this.clock.meter.numerator - this.countInRemaining + 1) * beatTicks)) {
+      this.countInRemaining -= 1;
+      this.dirty = true;
+    }
   }
 
   private nextLoopTick(blockFrames: number): number {
@@ -333,6 +358,7 @@ export class PcmLoop {
     this.port.postMessage({ type: "loop-status", sequence: this.sequence,
       phase: pass ? (pass.written > 0 ? "overdubbing" : "armed") : this.phase,
       captureMode: pass ? "overdub" : this.capturing ? "record" : null,
+      countInRemaining: this.countingIn ? this.countInRemaining : null,
       recordedFrames: pass?.written ?? this.written, totalFrames: pass ? pass.endFrame - pass.startFrame : this.metadata?.frames ?? 0,
       position: this.position, pendingPlay: this.pendingPlay, issue: this.issue });
     this.dirty = false;

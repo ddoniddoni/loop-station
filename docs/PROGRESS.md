@@ -4,13 +4,14 @@
 
 - 기준일: 2026-09-26
 - 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0/1은 부분 구현·미검증. Phase 2는 공통 시계의 8트랙 녹음·반복·오버더빙·Undo/Redo·프로젝트 저장·트랙 볼륨/팬/Mute/Solo·루프 마스터·출력 미터까지 부분 구현·미검증.**
-- 프로젝트 위치: `/Users/ddoni/dev/loop-station`. Next.js App Router 기반 한국어 준비 화면과 순수 시간 변환 함수를 생성함.
+- 프로젝트 위치: `/Users/ddoni/dev/loop-station`. 이번 Phase 1은 원 작업 트리의 미커밋 변경을 보존하기 위해 `/private/tmp/loop-station-phase1-8q0ykafd/worktree`에서 `feature/phase-1-count-in` 브랜치로 개발함. 기준 develop은 `09395d1`.
 - UI 기반: Radix Themes 3.3.0과 Stitch 콘솔 배치를 유지함. 01–08 모든 트랙에 4마디 녹음·반복·오버더빙·Undo/Redo·비우기·복구를 연결함. 모바일 Bank 1–4/5–8와 선택 트랙 상세 정보 지원. LOCAL에서 프로젝트 저장 상태와 재시도 제공. 트랙별 볼륨·팬·Mute·Solo, 루프 마스터 볼륨·음소거, 트랙/마스터 출력 미터·피크 홀드·과부하 경고, 믹서 Bank 전환과 v4 설정 저장/복구를 연결함. FX는 미구현.
 - 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 사용자 요청에 따라 테스트 실행을 중단함. PCM 녹음 테스트 9개, 오버더빙·이력·명령 처리 테스트 21개, 저장 관련 단위 테스트 10개, 다중 트랙 단위 테스트 12개와 저장 E2E 시나리오 3개는 작성만 했음. 실제 녹음·Worklet·권한·장치·실청취·IndexedDB 저장/복구는 미검증.
 - 이번 믹서 검증: 앞선 단위 11개·E2E 2개에 스테레오/미터 관련 단위 8개와 실제 Worklet 좌우 출력 E2E 1개를 추가 작성했으며 모두 미실행. 린트·타입 검사·빌드·React Doctor 실제 결과는 2026-09-26 로그 참조.
 - 이전 디자인 작업의 확인: 당시 요청 범위에서 원본 이미지 열람과 실제 DOM의 데스크톱·모바일 배치 치수, 설정창 표시만 확인함. 캡처 도구 시간 초과로 구현 화면의 스크린샷 비교는 미완료이며, 오디오·마이크 기능을 시작하지 않음.
 - 이번 Phase 0 보강: Worklet 첫 처리 응답과 15초 시작 제한, 초기화/종료 Promise 공유, 취소·오류 정리·재시작의 작업 번호 확인, 종료 실패 재시도 구현. 단위 11개와 production 오디오 E2E 4개를 작성했으며 미실행. 정적 검사와 빌드 결과는 아래 로그 참조.
-- 다음 작업: Phase 0 통과 항목을 우선 확인한다. 테스트 재개 요청 후 오디오 수명·production Worklet·마이크 권한/장치 해제와 누적된 PCM·믹서·저장 검증을 수행한다. 로컬 녹음 길이 선택 작업은 별도 미커밋 변경으로 보존하며 이 Phase 0 브랜치에 포함하지 않는다.
+- 이번 Phase 1: 기본 ON의 녹음 전 1마디 카운트인, METRO의 ON/OFF, Worklet 프레임 기준 준비 박·남은 박 수·녹음 시작, 취소/입력 끊김/오디오 종료와 설정 잠금 구현. 단위 26개·production E2E 시나리오 2개를 작성했으며 모두 미실행. 카운트인 범위는 구현 완료/미검증이며 Phase 1 전체는 부분 구현이다.
+- 다음 작업: Phase 1 Tap Tempo. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 카운트인·PCM·믹서·저장을 검증한다. 원 작업 트리의 녹음 길이·v5 관련 미커밋/미추적 파일 20개는 별도로 보존하며 이 브랜치에 포함하지 않는다.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 - 개발 기준: [Phase별 로드맵](plan/README.md)과 [다음 작업 계획](plan/NEXT.md).
 
@@ -25,7 +26,7 @@
 | Phase | 목표 | 상태 | 증거/다음 작업 |
 |---|---|---|---|
 | 0 | 저장소와 실제 오디오 기반 | 부분 구현 | SYS-01 검증. 사용자 시작/종료, 테스트 신호 Worklet, 마이크 권한·장치 UI와 환경 진단 구현. 첫 처리 응답·무응답 감지·취소/종료/재시작 보강. 실제 브라우저 검증은 남음 |
-| 1 | 한 트랙 녹음과 공통 시계 | 부분 구현 | 같은 Worklet 시계로 01 트랙의 다음 마디 시작·4마디 PCM 캡처·자동 반복·정지/재시작 구현. 채널 선택, AUTO 모니터링, Tap Tempo, 카운트인·다른 퀀타이즈 설정, 실제 검증은 남음 |
+| 1 | 한 트랙 녹음과 공통 시계 | 부분 구현 | 같은 Worklet 시계의 4마디 PCM 캡처·자동 반복·정지/재시작과 1마디 카운트인 ON/OFF 구현. 채널 선택, AUTO 모니터링, Tap Tempo·다른 퀀타이즈 설정, 실제 검증은 남음 |
 | 2 | 8트랙, 오버더빙, 로컬 저장 | 부분 구현 | 8트랙의 공통 시계 반복·오버더빙·1단계 Undo/Redo·프로젝트 자동 저장과 v1 이전 구현. 트랙 볼륨·팬·Mute·Solo, 루프 마스터·미터와 v4 저장 구현. 다른 루프 길이·실제 검증은 남음 |
 | 3 | 편집, 지연 보정, 파일 입출력 | 미착수 | 기본 루핑 제품 완성 목표 |
 | 4 | FX, 장면, 내부 녹음 | 미착수 | 라우팅/공연 녹음 검증 |
@@ -48,8 +49,8 @@
 | IN-02 | 입력 게인과 모니터링 | 1 | 부분 구현 | 모노 입력 버스, −24~+24 dB 게인, Worklet PCM 피크/RMS·클리핑 유지 표시, 기본 OFF 모니터와 독립 음량 구현. 장치 전환·오디오 중단 때 모니터 OFF. 실제 입력 처리 설정 표시는 기존 기능 유지. AUTO·음성 보정 옵션 변경·실청취·브라우저 검증은 남음 |
 | IN-03 | 녹음 지연 보정 | 3 | 미착수 | — |
 | CLK-01 | 공통 트랜스포트 | 1 | 부분 구현 | 동일 Worklet에서 40~240 BPM·3/4·4/4·6/8·7/8 시계와 녹음·반복을 연결. 루프가 있거나 녹음 준비 중이면 BPM·박자표 고정. Tap Tempo와 실제 동작 검증은 남음 |
-| CLK-02 | 메트로놈 | 1 | 부분 구현 | Worklet 오디오 프레임에서 절대 beat tick의 경계를 계산해 마디 첫 박 강박·나머지 약박을 별도 출력으로 생성. ON/OFF·0~100 음량 제공. 6/8 세부 악센트 묶음, 카운트인 전용/항상 모드, 실제 실청취·WAV 제외 검증은 남음 |
-| CLK-03 | 퀀타이즈와 고정 길이 | 1 | 부분 구현 | 실제 블록 길이 두 개 이상 여유가 있는 다음 마디에서 시작, 4마디 후 첫 반복. 재시작도 다음 마디, 정지·취소는 다음 처리 시점. 다른 길이·그리드·카운트인과 실제 경계 검증은 남음 |
+| CLK-02 | 메트로놈 | 1 | 부분 구현 | Worklet의 절대 beat tick 경계에서 강박·약박을 별도 출력으로 생성. ON/OFF·0~100 음량, 일반 클릭 OFF에서도 들리는 1마디 카운트인 제공. 6/8 세부 악센트 묶음, 실제 실청취·녹음/WAV 제외 검증은 남음 |
+| CLK-03 | 퀀타이즈와 고정 길이 | 1 | 부분 구현 | 실제 블록 두 개 이상 여유가 있는 다음 마디부터 카운트인 ON이면 한 마디 준비 후, OFF이면 바로 4마디 녹음·첫 반복. 재시작도 다음 마디, 정지·취소는 다음 처리 시점. 다른 길이·그리드와 실제 경계 검증은 남음 |
 | CLK-04 | 첫 루프로 템포 설정 | 2 | 미착수 | — |
 | CLK-05 | 장시간 동기화 | 2 | 미착수 | — |
 | CLK-06 | 템포 변경 정책 | 6 | 미착수 | — |
@@ -115,7 +116,7 @@
 | 웹폰트 | Pretendard Variable v1.3.9, 공식 WOFF2 2,057,688 bytes. next/font/local, display swap, preload false. SIL OFL 1.1 라이선스를 public/fonts/pretendard-OFL.txt에 포함 |
 | 추가 웹폰트 | Google Fonts 공식 배포 Geist 가변 TTF 169,056 bytes, JetBrains Mono 가변 TTF 187,208 bytes. 2026-09-22 다운로드, next/font/local·display swap·preload false. OFL을 public/fonts/{geist,jetbrains-mono}-OFL.txt에 포함 |
 | 로컬 저장 래퍼 | 미선택 |
-| Worklet 빌드 도구/메시지 버전 | esbuild 0.28.2. 테스트 신호용 `start`/`stop` 명령과 `playing`/`stopped` 응답. 입력 미터에는 경로 revision을 붙여 해제·재연결 이전 메시지를 무시함. Looper 명령 계약은 미설계 |
+| Worklet 빌드 도구/메시지 버전 | esbuild 0.28.2. 준비 응답 프로토콜 v2: `count-in` 상태와 `countInRemaining` 필드의 계약 변경으로 증가. 루프 명령은 trackId·sequence, 입력 미터는 경로 revision으로 이전 응답을 구분함. 프로젝트 저장 형식 v4와는 별개 |
 | Stretch DSP 패키지/버전/라이선스 | 도입 단계에서 공식 배포 검증 필요 |
 | Supabase 사용 여부 | 기본 로컬 모드. 클라우드 미설정 |
 | 기준 브라우저/OS/장치/sampleRate | macOS 26.6.2 arm64, Chromium 153.0.8010.12 headless. Desktop Chrome / Pixel 7 viewport 에뮬레이션. 실제 장치와 sampleRate 미측정 |
@@ -583,7 +584,23 @@
 - 검증 제한: 기존 사용자 테스트 중단 요청을 유지하여 단위·오디오·E2E·브라우저·실청취를 실행하지 않음. Phase 0 및 관련 인수 기준의 미검증 상태는 그대로 유지함.
 - 게시 대상: 검증한 통합 결과를 Conventional Commit 형식의 merge commit으로 기록하고 origin/develop에 push한다. 원격 반영 여부는 실제 push 결과와 로컬/원격 커밋 비교로 확인한다. 다음 작업은 테스트 재개 후 남은 Phase 0 검증과 오류 수정이다.
 
+### 2026-09-26 — Phase 1 녹음 전 1마디 카운트인 / CLK-02·CLK-03, 관련 LOOP-02
+
+- 사용자 요청: “다음 phase”와 기존 Phase 시작 전 브랜치 생성·개발 종료 후 커밋/푸시 규칙. `git fetch origin develop` 후 `origin/develop`의 `09395d1`에서 `feature/phase-1-count-in`과 별도 worktree를 만들고 개발을 시작함. 원 작업 트리의 1/2/4/8마디 선택·v5 관련 미커밋/미추적 파일 20개는 이번 변경에 포함하지 않음. 이 브랜치는 4마디·v4 저장 및 v1/v2/v3 읽기를 유지함.
+- 변경 파일(엔진): `src/audio/engine/worklet-protocol.ts`, `src/audio/loop/loop-protocol.ts`, `loop-controller.ts`, `pcm-loop.ts`, `pcm-station.ts`, `src/audio/worklets/test-tone-processor.ts`.
+- 변경 파일(UI): `src/components/audio/use-audio-session.ts`, `audio-setup.tsx`, `metronome-controls.tsx`, `src/components/studio/recording-track.tsx`, `src/lib/i18n/ko.ts`.
+- 변경 파일(검증·문서): 신규 `tests/audio/count-in.test.ts`, `count-in-worklet.test.ts`, `tests/e2e/count-in.spec.ts`, 기존 `tests/audio/loop-controller.test.ts`, `station-controller.test.ts`, `README.md`, `docs/plan/README.md`, `docs/plan/NEXT.md`, 이 문서.
+- 녹음 예약: 기본 ON이면 다음 안전한 마디부터 한 마디를 센 뒤 기존 4마디 PCM 캡처를 시작함. OFF이면 기존 다음 마디 캡처를 유지함. 준비와 녹음 경계·남은 박 수는 Worklet 공통 시계의 절대 tick→frame 변환을 사용함. 타이머/React를 루프 시계로 쓰지 않으며 카운트인 동안 PCM을 쓰거나 take를 확정하지 않음. 오버더빙은 기존 다음 루프 경계의 한 바퀴를 유지함.
+- 클릭 경로: 메트로놈 OFF라도 카운트인 중에는 별도 클릭 출력으로 준비 박을 만들며 같은 클릭 음량을 사용함(음량 0이면 무음). 일반 메트로놈 ON은 준비 종료 후에도 유지함. 녹음은 기존 입력 PCM 경로만 받음. 정적 점검에서 첫 블록 프레임이 반올림된 박 경계인 경우 기존 `ceil` 계산이 해당 박을 건너뛸 수 있어 후보 beat index를 `floor`부터 찾도록 변경함. 44.1kHz·127 BPM 시나리오를 작성했으나 실제 실행/재현은 하지 않음.
+- UI·수명: METRO에 카운트인 Switch와 도움말, 트랙에 COUNT IN·남은 박 수와 아직 녹음 전임을 표시함. 녹음 사전 확인 때 설정을 고정하고 준비·녹음·편집 중 변경과 다른 트랙 녹음을 차단함. 취소·입력 끊김·오디오 종료 시 미확정 준비를 해제하고 기존 루프/복구 이력을 유지하도록 연결함. 설정은 탭 상태로 유지하고 새로고침하면 ON으로 초기화하며 프로젝트 저장 스키마는 바꾸지 않음. 상태 계약이 달라 준비 응답 프로토콜을 v2로 올려 이전 Worklet을 준비 완료로 받지 않음.
+- 작성한 검증: 코어 15개(44.1/48kHz·3/4·4/4·6/8·7/8·40/120/127/240 BPM 조합의 ON/OFF, 정확한 첫/끝 프레임·첫 반복, 반올림 경계, 너무 가까운 마디 건너뛰기, 취소/정지/중단/입력 유실, 잘못된 명령), production Worklet 코드를 불러오는 합성 블록 6개(클릭·다른 트랙 제외, 일반 클릭 유지, 첫 블록의 반올림 박, OFF, 취소/입력 해제 시 다른 트랙 유지), 컨트롤러 4개와 프로젝트 잠금 1개. E2E 시나리오 2개는 Chromium 합성 마이크와 실제 production Worklet을 대상으로 기본 ON·잠금·취소·OFF 녹음·새로고침 설정 초기화, 준비 중 오디오 종료를 다룸. **총 단위 26개와 E2E 시나리오 2개는 모두 미실행이며 통과 여부는 미확인.**
+- 실제 실행: `npm run lint` 성공(경고 0개), `npm run typecheck` 성공, `NEXT_TELEMETRY_DISABLED=1 npm run build` 성공(Worklet 38.2kB, `/`·`/_not-found` 정적 빌드). `npx react-doctor@latest --verbose --scope changed` 61개 파일 100/100, 전체 `npx react-doctor@latest --verbose` 71개 파일 100/100, 진단 없음. `git diff --check` 공백 오류 없음.
+- 미실행/제한: 기존 사용자 요청에 따라 `npm run test`, `npm run test:audio`, `npm run test:e2e`, 브라우저 조작·실청취를 실행하지 않음. 정확한 준비/녹음/반복 경계, 실제 클릭·입력 분리, 잠금·취소·입력 해제, 모바일/데스크톱 조작은 검증 보류. 임의 마디 수 카운트인·설정 저장·새 퀀타이즈 그리드·6/8 추가 악센트는 범위 밖. 카운트인 구현과 Phase 1 전체 인수 기준 통과를 구분함.
+- 다음 작업: Tap Tempo의 작은 기능 단위. 테스트 재개 요청이 오면 Phase 0의 남은 통과 항목부터 확인하고 카운트인과 누적된 PCM·저장·믹서 검증을 수행함. 관련 변경만 커밋해 작업 브랜치에 push하고 로컬/원격 커밋 일치로 확인한다. develop 통합은 별도 요청 범위다.
+
 ## 알려진 제한과 차단 항목
+
+Phase 1 카운트인은 Worklet·컨트롤러·UI를 연결했지만 실제 녹음 첫 프레임·준비 박 청취·취소·입력 끊김과 브라우저 상호작용은 미검증이다. 새로고침하면 기본 ON으로 돌아오며 저장 스키마에는 포함하지 않는다. 별도 미커밋 길이 선택 작업과 통합할 때 카운트인 길이를 녹음 길이에 포함하지 않는 계약과 기존 v4/v5 읽기를 함께 검증해야 한다.
 
 Phase 0 시작·종료 보강은 정적 코드 점검을 근거로 구현했으며 실제 증상 재현/수정 후 재실행은 하지 않았다. Worklet 준비 응답과 시간 제한, 자원 해제·취소 후 재시작·실패 복구, Strict Mode/Fast Refresh와 브라우저별 AudioContext 동작은 테스트 재개 후 확인해야 한다. 빌드된 Worklet 파일의 생성 성공은 브라우저에서의 로딩·PCM 출력 성공과 구분한다.
 
@@ -593,4 +610,4 @@ AudioContext·Worklet·마이크 입력·공통 시계·메트로놈과 8트랙�
 
 ## 다음 Codex 작업
 
-시작 시 `AGENTS.md`, [개발 로드맵](plan/README.md), [현재 작업 계획](plan/NEXT.md), 이 기록을 읽는다. 최신 우선순위는 Phase 0이며 오디오 수명 보강은 구현 완료/미검증이다. 테스트 재개 요청 후 `audio-engine.test.ts`와 `audio-lifecycle.spec.ts`, 권한·환경 진단·장치 해제를 먼저 확인한다. 기존 PCM/오버더빙/이력/저장·믹서 검증과 실제 장치 청취도 필요하다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 이 브랜치는 기존 4마디·schemaVersion 4 및 v1/v2/v3 읽기를 유지한다. 별도 미커밋인 로컬 녹음 길이·v5 작업은 보존하고 다음 통합 시 이전 저장본을 유지한다. 후속 카운트인 계획은 NEXT.md를 따른다.
+시작 시 `AGENTS.md`, [개발 로드맵](plan/README.md), [현재 작업 계획](plan/NEXT.md), 이 기록을 읽는다. Phase 0 오디오 수명 보강과 Phase 1의 1마디 카운트인은 구현 완료/미검증이며 다음 기능은 Tap Tempo다. 테스트 재개 요청 후 `audio-engine.test.ts`와 `audio-lifecycle.spec.ts`, 권한·환경 진단·장치 해제를 먼저 확인하고 새 카운트인 단위/Worklet/E2E를 실행한다. 기존 PCM/오버더빙/이력/저장·믹서 검증과 실제 장치 청취도 필요하다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 이 브랜치는 기존 4마디·schemaVersion 4 및 v1/v2/v3 읽기를 유지한다. 별도 미커밋인 로컬 녹음 길이·v5 작업은 보존하고 다음 통합 시 이전 저장본을 유지한다. 후속 범위는 NEXT.md를 따른다.

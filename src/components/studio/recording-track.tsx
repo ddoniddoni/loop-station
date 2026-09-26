@@ -3,18 +3,19 @@
 import { Button, Card, Heading, Text } from "@radix-ui/themes";
 import { useSyncExternalStore } from "react";
 import { isCapturePhase, type LoopSnapshot } from "@/audio/loop/loop-controller";
-import { useLoopController, useMicrophoneController } from "@/components/audio/audio-engine-provider";
+import { useAudioSessionContext, useLoopController, useMicrophoneController } from "@/components/audio/audio-engine-provider";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { saveStatusLabel } from "./loop-save-label";
 import { trackIsEditing, workspaceBlocksTrack } from "./track-availability";
 
 const labels: Record<LoopSnapshot["phase"], string> = {
-  empty: "EMPTY", preparing: "PREPARING", armed: "ARMED", recording: "RECORDING",
+  empty: "EMPTY", preparing: "PREPARING", armed: "ARMED", "count-in": "COUNT IN", recording: "RECORDING",
   overdubbing: "OVERDUB", playing: "PLAYING", stopped: "STOPPED", incomplete: "INCOMPLETE",
 };
 
 function RecordingAction({ snapshot, inputReady, trackId }: { snapshot: LoopSnapshot; inputReady: boolean; trackId: number }) {
   const controller = useLoopController(trackId);
+  const audio = useAudioSessionContext();
   const blocked = workspaceBlocksTrack(snapshot);
   if (isCapturePhase(snapshot.phase)) {
     const overdub = snapshot.captureMode === "overdub";
@@ -30,7 +31,7 @@ function RecordingAction({ snapshot, inputReady, trackId }: { snapshot: LoopSnap
     </Button>;
   }
   return <Button className="station-track-action" variant="outline" disabled={!snapshot.connected || !inputReady || blocked} aria-describedby={`recording-hint-${trackId}`}
-    onClick={() => void controller.record()}><span className="station-record-dot" /><span>[ RECORD 4 BARS ]<small>4마디 녹음</small></span></Button>;
+    onClick={() => void controller.record(audio.countInEnabled)}><span className="station-record-dot" /><span>[ RECORD 4 BARS ]<small>{audio.countInEnabled ? "1마디 준비 후 4마디 녹음" : "4마디 녹음"}</small></span></Button>;
 }
 
 function LoopEditControls({ snapshot, inputReady, trackId }: { snapshot: LoopSnapshot; inputReady: boolean; trackId: number }) {
@@ -59,7 +60,8 @@ function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
   if (!snapshot.connected) return "상단 AUDIO에서 오디오를 시작하세요.";
   if (snapshot.historyPending) return `다음 루프 경계에서 ${snapshot.historyPending === "undo" ? "Undo" : "Redo"} 적용`;
   if (snapshot.phase === "preparing") return "녹음 용량을 확인하고 있습니다.";
-  if (snapshot.phase === "armed") return snapshot.captureMode === "overdub" ? "다음 루프부터 한 바퀴 덧녹음" : "다음 마디에서 녹음 시작";
+  if (snapshot.phase === "count-in") return `카운트인 · ${snapshot.countInRemaining}박 남음 · 아직 녹음하지 않습니다.`;
+  if (snapshot.phase === "armed") return snapshot.captureMode === "overdub" ? "다음 루프부터 한 바퀴 덧녹음" : snapshot.countIn ? "다음 마디부터 1마디 카운트인" : "다음 마디에서 녹음 시작";
   if (snapshot.phase === "recording") return "입력 녹음 중 · 4마디 후 자동 반복";
   if (snapshot.phase === "overdubbing") return "오버더빙 중 · 한 바퀴 후 자동 확정";
   if (snapshot.phase === "incomplete") return "중단된 녹음 · 부분 데이터 보관 중";
@@ -67,7 +69,7 @@ function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
   if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크를 연결하세요.";
   if (snapshot.canRestore) return "비운 루프 복구 가능 · 다음 녹음 완료 전까지";
   if (!inputReady) return "입력 설정에서 마이크를 연결하세요.";
-  return "다음 마디부터 4마디 · 모노 입력";
+  return "4마디 · 모노 입력 · 준비 박은 상단 METRO에서 설정";
 }
 
 function RecordingWindow({ snapshot }: { snapshot: LoopSnapshot }) {

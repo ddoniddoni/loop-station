@@ -22,6 +22,8 @@ type PendingHistory = { direction: HistoryDirection; target: CachedLoop; sequenc
 export type LoopSnapshot = {
   phase: LoopPhase;
   captureMode: CaptureMode | null;
+  countIn: boolean;
+  countInRemaining: number | null;
   connected: boolean;
   hasClip: boolean;
   canRestore: boolean;
@@ -38,14 +40,14 @@ export type LoopSnapshot = {
   workspaceIssue: string | null;
 };
 const initialSnapshot: LoopSnapshot = {
-  phase: "empty", captureMode: null, connected: false, hasClip: false, canRestore: false,
+  phase: "empty", captureMode: null, countIn: false, countInRemaining: null, connected: false, hasClip: false, canRestore: false,
   canUndo: false, canRedo: false, historyPending: null, metadata: null,
   progress: 0, pendingPlay: false, issue: null, storageNote: null,
   save: initialSaveState, blockedByTrack: null, workspaceIssue: null,
 };
 
 export function isCapturePhase(phase: LoopPhase): boolean {
-  return phase === "preparing" || phase === "armed" || phase === "recording" || phase === "overdubbing";
+  return phase === "preparing" || phase === "armed" || phase === "count-in" || phase === "recording" || phase === "overdubbing";
 }
 
 async function checkStorage(bytes: number): Promise<string | null> {
@@ -142,7 +144,7 @@ export class LoopController {
     this.node = null;
     this.context = null;
     this.transport = null;
-    this.update({ connected: false, phase: this.idlePhase(), captureMode: null, progress: 0, pendingPlay: false,
+    this.update({ connected: false, phase: this.idlePhase(), captureMode: null, countInRemaining: null, progress: 0, pendingPlay: false,
       issue: interrupted ? "오디오가 종료되어 미확정 녹음을 취소했습니다. 이전에 확정한 루프는 이 탭에 남아 있습니다." : this.snapshot.issue });
   }
 
@@ -172,7 +174,7 @@ export class LoopController {
     // Old playback/empty snapshots must not unlock an asynchronous preflight.
     if (this.pendingCapture?.sequence === null) return;
     if (!isCapturePhase(value.phase)) this.pendingCapture = null;
-    this.update({ phase: value.phase, captureMode: value.captureMode, progress: value.position,
+    this.update({ phase: value.phase, captureMode: value.captureMode, countInRemaining: value.countInRemaining, progress: value.position,
       pendingPlay: value.pendingPlay, issue: value.issue });
   }
 
@@ -200,9 +202,9 @@ export class LoopController {
 
   acceptTransport(transport: TransportSnapshot): void { this.transport = transport; }
 
-  async record(): Promise<void> {
+  async record(countIn = true): Promise<void> {
     if (this.locked) return;
-    await this.prepareCapture("record");
+    await this.prepareCapture("record", countIn);
   }
 
   async overdub(): Promise<void> {
@@ -210,7 +212,7 @@ export class LoopController {
     await this.prepareCapture("overdub");
   }
 
-  private async prepareCapture(mode: CaptureMode): Promise<void> {
+  private async prepareCapture(mode: CaptureMode, countIn = false): Promise<void> {
     if (!this.context || !this.node || !this.transport || !this.snapshot.connected) return;
     const input = this.input.getSnapshot();
     if (!input.routed || input.phase !== "active") { this.update({ issue: "입력 설정에서 마이크를 먼저 연결하세요." }); return; }
@@ -218,7 +220,7 @@ export class LoopController {
     const node = this.node;
     const config = this.transport;
     this.pendingCapture = capture;
-    this.update({ phase: "preparing", captureMode: mode, issue: null, storageNote: null });
+    this.update({ phase: "preparing", captureMode: mode, countIn, countInRemaining: null, issue: null, storageNote: null });
     try {
       const bytes = recordingCapacity(this.context.sampleRate, config) * Float32Array.BYTES_PER_ELEMENT;
       if (bytes * 4 + this.history.retainedBytes * 2 > LOOP_MEMORY_BYTES) throw new Error("32MiB 작업 메모리가 부족합니다. 기존 루프와 복구 이력은 유지됩니다.");
@@ -230,7 +232,7 @@ export class LoopController {
       const archive = new ArrayBuffer(bytes);
       capture.sequence = ++this.sequence;
       this.update({ phase: "armed", storageNote });
-      node.port.postMessage({ trackId: this.workspace?.trackId, type: mode === "record" ? "loop-record" : "loop-overdub", sequence: capture.sequence, config, pcm, archive }, [pcm, archive]);
+      node.port.postMessage({ trackId: this.workspace?.trackId, type: mode === "record" ? "loop-record" : "loop-overdub", sequence: capture.sequence, config, countIn, pcm, archive }, [pcm, archive]);
     } catch (error) {
       if (capture.generation !== this.generation) return;
       this.pendingCapture = null;
@@ -252,7 +254,7 @@ export class LoopController {
     // An overdub may have completed just before cancellation. Keep its ID until the audio thread acknowledges the result.
     if (capture.mode === "record") {
       this.pendingCapture = null;
-      this.update({ phase: "empty", captureMode: null, progress: 0, issue: null });
+      this.update({ phase: "empty", captureMode: null, countInRemaining: null, progress: 0, issue: null });
     }
   }
 

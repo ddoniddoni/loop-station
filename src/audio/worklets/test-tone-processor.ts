@@ -93,9 +93,11 @@ class TestToneProcessor extends AudioWorkletProcessor {
     let nextBeatIndex = 0;
     let beatTicks = 0;
 
-    if (this.clock.playing && this.metronomeEnabled) {
+    if (this.clock.playing) {
       beatTicks = PPQ * 4 / this.clock.meter.denominator;
-      nextBeatIndex = Math.max(0, Math.ceil((this.clock.positionTick - 1e-7) / beatTicks));
+      // Start conservatively: rounding can put this block's first frame just AFTER
+      // the exact tick while still being the correct rounded beat frame.
+      nextBeatIndex = Math.max(0, Math.floor(this.clock.positionTick / beatTicks));
       nextBeatFrame = this.clock.frameAtTick(nextBeatIndex * beatTicks);
       while (nextBeatFrame < blockPositionFrame) {
         nextBeatIndex += 1;
@@ -112,12 +114,13 @@ class TestToneProcessor extends AudioWorkletProcessor {
       if (inputSample !== undefined) this.inputMeter.add(sample);
       // Monitor limiting never changes the PCM captured by the loop above.
       if (monitor && frame < monitor.length) monitor[frame] = Math.max(-1, Math.min(1, sample));
+      const clickActive = this.clock.playing && (this.metronomeEnabled || this.loop.countingIn);
       if (blockPositionFrame + frame === nextBeatFrame) {
-        this.click.trigger(nextBeatIndex % this.clock.meter.numerator === 0);
+        if (clickActive) this.click.trigger(nextBeatIndex % this.clock.meter.numerator === 0);
         nextBeatIndex += 1;
         nextBeatFrame = this.clock.frameAtTick(nextBeatIndex * beatTicks);
       }
-      const clickValue = this.click.nextSample(this.clock.playing && this.metronomeEnabled);
+      const clickValue = this.click.nextSample(clickActive);
       this.level = this.enabled
         ? Math.min(1, this.level + this.envelopeStep)
         : Math.max(0, this.level - this.envelopeStep);

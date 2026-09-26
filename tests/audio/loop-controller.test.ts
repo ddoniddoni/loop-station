@@ -18,7 +18,7 @@ function fixture(bpm = 120, repository: LoopRepository | null = null) {
   controller.acceptTransport({ type: "transport", ...config, playing: true, positionFrame: 0, positionTick: 0, contextFrame: 0 });
   const metadata: LoopMetadata = { ...config, sampleRate: 48000, frames: 48000 * 16 * 60 / bpm, ticks: 15360, complete: true };
   function status(sequence: number, phase: "empty" | "playing") {
-    controller.accept({ type: "loop-status", sequence, phase, captureMode: null, recordedFrames: phase === "empty" ? 0 : metadata.frames,
+    controller.accept({ type: "loop-status", sequence, phase, captureMode: null, countInRemaining: null, recordedFrames: phase === "empty" ? 0 : metadata.frames,
       totalFrames: phase === "empty" ? 0 : metadata.frames, position: 0, pendingPlay: false, issue: null });
   }
   function captured(sequence: number, mode: CaptureMode) {
@@ -41,6 +41,31 @@ function storage() {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("loop command acknowledgements and preflight", () => {
+  it.each([true, false])("freezes count-in=%s in the prepared record command", async (countIn) => {
+    const f = fixture();
+    await f.controller.record(countIn);
+    await f.controller.record(!countIn);
+    expect(f.messages).toHaveLength(1);
+    expect(f.messages[0]).toMatchObject({ type: "loop-record", countIn });
+    expect(f.controller.getSnapshot()).toMatchObject({ countIn, phase: "armed" });
+  });
+
+  it("keeps countdown locked and clears its progress on cancel", async () => {
+    const f = fixture(); await f.controller.record();
+    f.controller.accept({ type: "loop-status", sequence: f.messages[0].sequence, phase: "count-in", captureMode: "record",
+      countInRemaining: 3, recordedFrames: 0, totalFrames: 384000, position: 0, pendingPlay: false, issue: null });
+    expect(f.controller.getSnapshot()).toMatchObject({ phase: "count-in", countInRemaining: 3, hasClip: false });
+    expect(f.controller.locked).toBe(true);
+    f.controller.cancel();
+    expect(f.messages.at(-1)).toMatchObject({ type: "loop-cancel", captureMode: "record" });
+    expect(f.controller.getSnapshot()).toMatchObject({ phase: "empty", countInRemaining: null, hasClip: false });
+  });
+
+  it("does not add a count-in to an overdub", async () => {
+    const f = fixture(); await f.complete("record"); await f.controller.overdub();
+    expect(f.messages.at(-1)).toMatchObject({ type: "loop-overdub", countIn: false });
+  });
+
   it("keeps capture locked across stale status messages and cancels an unresolved preflight", async () => {
     let resolveEstimate: (estimate: StorageEstimate) => void = () => { throw new Error("No pending estimate"); };
     vi.stubGlobal("navigator", { storage: { estimate: () => new Promise<StorageEstimate>((resolve) => { resolveEstimate = resolve; }) } });

@@ -67,6 +67,7 @@ export function AudioSetup() {
       <TransportControls enabled={ready} settingsLocked={loopState.locked} snapshot={audio.transport} savedConfig={loopState.config} onStart={audio.startTransport}
         onStop={audio.stopTransport} onReset={audio.resetTransport} onConfigure={audio.configureTransport} />
       <MetronomeControls audioReady={ready} enabled={audio.metronomeEnabled} volume={audio.metronomeVolume}
+        countInEnabled={audio.countInEnabled} captureLocked={loopState.performing} onCountInChange={audio.setCountInEnabled}
         onEnabledChange={audio.setMetronomeEnabled} onVolumeChange={audio.setMetronomeVolume} />
       <AudioPower />
       <Button type="button" className="station-panic" variant="outline" color="red" disabled={audio.phase === "idle" || audio.phase === "error" || audio.phase === "stopping"}
