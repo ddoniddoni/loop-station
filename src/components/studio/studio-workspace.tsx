@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge, Button, Heading, Text } from "@radix-ui/themes";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { EnvironmentDiagnostics } from "@/components/audio/environment-diagnostics";
 import { StudioInputPanel } from "@/components/studio/studio-input-panel";
 import { MixerConsole } from "@/components/studio/mixer-console";
@@ -9,6 +9,7 @@ import { RecordedClipDetails, RecordingTrack } from "@/components/studio/recordi
 import { StudioMobileNavigation, type StudioView } from "@/components/studio/studio-navigation";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
+import { KeyboardControls } from "./keyboard-controls";
 
 const trackSlots = [
   { number: "01", name: "Beat", tone: "mint" },
@@ -73,11 +74,19 @@ function InspectorPanel({ selected }: { selected: TrackSlot }) {
 
 export function StudioWorkspace() {
   const [selected, setSelected] = useState<TrackSlot>(trackSlots[0]);
+  const selectedTrack = useRef(0);
   const [bank, setBank] = useState(0);
   const [view, setView] = useState<StudioView>("tracks");
+  function selectTrack(slot: TrackSlot) {
+    selectedTrack.current = Number(slot.number) - 1;
+    setSelected(slot);
+  }
   return (
     <div className="station-studio" data-view={view}>
-      <div className="station-workspace"><LibraryPanel /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
+      <KeyboardControls selectedTrackId={Number(selected.number) - 1} getSelectedTrack={() => selectedTrack.current} onSelectTrack={(trackId) => {
+        selectTrack(trackSlots[trackId]); setBank(trackId < 4 ? 0 : 1); setView("tracks");
+      }} />
+      <div className="station-workspace"><LibraryPanel /><TrackBoard selected={selected} onSelect={selectTrack} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
       <MixerConsole bank={bank} onBankChange={setBank} slots={trackSlots} />
       <StudioMobileNavigation view={view} onNavigate={setView} />
     </div>

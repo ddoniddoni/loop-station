@@ -4,7 +4,7 @@
 
 - 기준일: 2026-09-27
 - 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0/1은 부분 구현·미검증. Phase 2는 공통 시계의 8트랙 녹음·반복·오버더빙·Undo/Redo·프로젝트 저장·트랙 볼륨/팬/Mute/Solo·루프 마스터·출력 미터·1/2/4/8마디 선택까지 부분 구현·미검증.**
-- 프로젝트 위치: `/Users/ddoni/dev/loop-station`, 현재 브랜치 develop. Tap Tempo에 이어 `feature/phase-2-recording-length`의 `97f7eff`를 통합함. 파일 백업과 Git stash에 이전 미커밋 작업 원본도 보관함.
+- 프로젝트 위치: `/Users/ddoni/dev/loop-station`, 현재 브랜치 `feature/phase-2-keyboard-controls`. 최신 develop `e569efc`에서 개발 전에 브랜치를 생성함. 녹음 길이 작업의 파일 백업과 Git stash는 그대로 보관함.
 - UI 기반: Radix Themes 3.3.0과 Stitch 콘솔 배치를 유지함. 01–08 모든 트랙에 1/2/4/8마디 선택 녹음·반복·오버더빙·Undo/Redo·비우기·복구를 연결함. 모바일 Bank 1–4/5–8와 선택 트랙 상세 정보 지원. LOCAL에서 프로젝트 저장 상태와 재시도 제공. 트랙별 볼륨·팬·Mute·Solo, 루프 마스터 볼륨·음소거, 트랙/마스터 출력 미터·피크 홀드·과부하 경고, 믹서 Bank 전환과 v5 프로젝트 저장/복구를 연결함. FX는 미구현.
 - 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 사용자 요청에 따라 테스트 실행을 중단함. PCM 녹음 테스트 9개, 오버더빙·이력·명령 처리 테스트 21개, 저장 관련 단위 테스트 10개, 다중 트랙 단위 테스트 12개와 저장 E2E 시나리오 3개는 작성만 했음. 실제 녹음·Worklet·권한·장치·실청취·IndexedDB 저장/복구는 미검증.
 - 이전 믹서 검증: 앞선 단위 11개·E2E 2개에 스테레오/미터 관련 단위 8개와 실제 Worklet 좌우 출력 E2E 1개를 추가 작성했으며 모두 미실행. 린트·타입 검사·빌드·React Doctor 실제 결과는 2026-09-26 로그 참조.
@@ -13,7 +13,8 @@
 - 이번 Phase 0 보강: Worklet 첫 처리 응답과 15초 시작 제한, 초기화/종료 Promise 공유, 취소·오류 정리·재시작의 작업 번호 확인, 종료 실패 재시도 구현. 단위 11개와 production 오디오 E2E 4개를 작성했으며 미실행. 정적 검사와 빌드 결과는 아래 로그 참조.
 - 이번 Phase 1: Tap Tempo로 4분음표 입력 간격의 BPM 제안·설정 적용, 40~240 BPM 범위·최근 네 간격 평균·빠른 입력 제외·긴 중단 후 재시작·상태 초기화·기존 템포 잠금을 구현함. 단위 18개와 production E2E 시나리오 4개는 작성만 했으며 미실행. 정적 검사 결과는 아래 로그 참조.
 - 별도 구현: 1마디 카운트인은 `feature/phase-1-count-in` / `f7195e0`에 구현·푸시되어 있으며 develop에는 아직 통합하지 않음. 카운트인 단위 26개·E2E 2개도 미실행이며 해당 브랜치의 기록을 따름.
-- 다음 작업: 기본 키보드 연주 조작. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
+- 이번 Phase 2: 기본 OFF의 키보드 연주 토글, Space·1–8·R·S·Esc·Ctrl/Cmd+Z/Shift+Z를 기존 전역/선택 트랙 명령에 연결함. 입력·IME·반복·설정창 보호와 최신 상태 잠금, 모바일 Bank 전환·사용 불가 사유를 구현함. 단위 20개·E2E 5개는 작성만 했으며 미실행.
+- 다음 작업: 입력 채널 선택. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 키보드·Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 - 개발 기준: [Phase별 로드맵](plan/README.md)과 [다음 작업 계획](plan/NEXT.md). 이후 기능 선택과 작업 범위는 이 계획을 기준으로 진행한다.
 
@@ -88,7 +89,7 @@
 | FX-06 | 독립 시간/음정 변환 | 6 | 미착수 | — |
 | RHY-01 | 드럼 스텝 시퀀서 | 5 | 미착수 | — |
 | RHY-02 | 샘플 패드와 기본 악기 | 5 | 미착수 | — |
-| MIDI-01 | 키보드 단축키 | 2 | 미착수 | — |
+| MIDI-01 | 키보드 단축키 | 2 | 부분 구현 | 기본 OFF의 연주 모드, Space 전역 재생/정지·1–8 선택·R 녹음/재생/오버더빙·S 정지·Esc 취소·Ctrl/Cmd+Z/Shift+Z 이력 연결. 입력·IME·반복·설정창·편집 잠금 보호 구현. 사용자 지정 키, Mute/Solo·수동 저장·Panic 키와 실제 검증은 남음 |
 | MIDI-02 | MIDI Learn과 풋 컨트롤 | 5 | 미착수 | — |
 | MIDI-03 | MIDI 클립 | 5 | 미착수 | — |
 | MIDI-04 | 외부 MIDI 동기화 | 6 | 미착수 | — |
@@ -647,7 +648,21 @@
 - 검증: 위 기능 커밋에서 실행한 린트·타입 검사·빌드·React Doctor 결과를 유지함. 병합 결과의 제품 코드·테스트·의존성은 검증한 `97f7eff`와 동일하며 추가 변경은 README·계획·진행 기록의 통합 상태뿐이다. 최종 스테이징 공백 검사 후 merge commit을 만들어 origin/develop에 push하고 로컬/원격 일치와 미커밋 변경 없음을 확인한다.
 - 기존 테스트 중단 방침과 인수 기준의 미검증 상태는 그대로 유지함. 카운트인 `f7195e0`은 별도 브랜치에 보존했고 다음 기능은 기본 키보드 연주 조작이다.
 
+### 2026-09-27 — Phase 2 기본 키보드 연주 조작 / MIDI-01 부분 구현
+
+- 사용자 요청: 계획의 다음 Phase 개발. `git fetch origin`으로 최신 develop `e569efc`를 확인하고 개발 전에 `feature/phase-2-keyboard-controls`를 생성함. 기존 녹음 길이 원본 백업과 카운트인 브랜치는 보존함.
+- 변경 파일: `src/lib/keyboard/{performance-commands,shortcut-target}.ts`, `src/components/studio/{keyboard-controls,studio-workspace}.tsx`, `src/app/globals.css`, `tests/unit/performance-keyboard.test.ts`, `tests/e2e/keyboard-controls.spec.ts`, `README.md`, `docs/plan/{README,NEXT}.md`, 이 기록.
+- 사용 정책: 새로고침 시 OFF인 키보드 연주 토글과 포커스 영역을 추가함. 켜기/연주 영역 이동은 포커스만 옮기며 오디오나 마이크를 초기화하지 않음. Space 전역 재생/정지, 1–8 선택, R 빈 트랙 녹음·정지 루프 재생·재생 중 오버더빙, S 선택 트랙 정지, Esc 녹음·재생/이력 예약 취소, Ctrl/Cmd+Z·Shift+Z 이력 조작을 연결함. 숫자 키는 선택 트랙과 모바일 Bank/Loops 화면을 함께 바꿈.
+- 명령과 잠금: 키 입력 때 선택 트랙 참조와 컨트롤러의 최신 snapshot을 읽어 기존 record/play/overdub/stop/cancel/changeHistory 및 전역 transport 경로로 전달함. 녹음·편집·저장·샘플레이트/복구 잠금을 따르고 녹음 중 R/S는 실행하지 않음. 정지·취소는 기존 중단 경로를 유지함. 사용 가능 명령/불가 사유와 요청 상태를 표시하며 Worklet 응답 전에 녹음 완료로 표시하지 않음.
+- 입력 수명: 단일 document 리스너를 Effect에 설치하고 해제함. useEffectEvent로 최신 준비 상태와 콜백을 사용하며 트랙 선택 참조는 이벤트 안에서 동기 갱신함. 입력란·contenteditable·버튼·링크·summary·슬라이더 등 기본 조작, 열린 dialog/listbox/menu, 숨겨진 문서, IME composition/keyCode 229, 자동 반복, 처리된 이벤트와 지원하지 않는 조합키를 제외함. 설치된 Radix DismissableLayer가 Esc에서 preventDefault 후 닫기를 실행하는 경로도 코드로 확인함. 실제 브라우저 재현은 미실행.
+- 작성한 검증: 단위 20개 — 키 매핑·Ctrl/Cmd·8종 입력 제외, REC/PLAY/OVERDUB 상태 전환·미완료 루프·오디오/입력 없음·저장/복구/다른 트랙 잠금, 4종 캡처 상태 취소, 예약 취소·정지·Undo/Redo, 실제 StationController에 선택 트랙 명령 1회 전달과 동기 캡처 잠금. production E2E 시나리오 5개 — opt-in/재시작·모바일 Bank, 실제 전역 transport/자동 반복/native Space, 설정창/IME/입력 보호, 합성 마이크를 사용하는 실제 Worklet 녹음·Esc 설정창 닫기와 녹음 취소 구분·다른 트랙 잠금·오버더빙/Undo/Redo, editable/custom control에서 기본 이벤트 유지. 모두 작성만 했으며 미실행.
+- 실제 실행: 최종 `npm run lint` 성공(경고 0개), `npm run typecheck` 성공, `NEXT_TELEMETRY_DISABLED=1 npm run build` 성공(Worklet 37.4kB, `/`·`/_not-found` 정적 빌드). `npx react-doctor@latest --verbose --scope changed` 71개 파일 100/100, 전체 `npx react-doctor@latest --verbose` 78개 파일 100/100, 진단 없음. `git diff --cached --check` 공백 오류 없음.
+- 제한: 기존 사용자 지시대로 단위·오디오·E2E·브라우저·실청취는 실행하지 않음. 실제 키/IME·포커스·Radix 조합과 모바일 배치, PCM·저장 결과는 미검증이며 Phase 2/MIDI-01 전체 완료를 주장하지 않음. 키 변경·Mute/Solo·수동 저장·Panic 단축키·외부 MIDI는 후속 범위. 저장 schema v5, v1~v4 읽기 이전, Worklet/DSP·오디오 시계·의존성은 변경하지 않음.
+- 다음 작업: IN-01 입력 채널 선택. 테스트 재개 시 Phase 0와 누적된 키보드/PCM/저장 검증부터 진행함. 관련 변경만 커밋·기능 브랜치에 푸시하고 로컬/원격 일치로 확인한다. develop 병합은 별도 요청 범위다.
+
 ## 알려진 제한과 차단 항목
+
+키보드 연주 모드·키 매핑·기존 명령 연결·입력 보호를 구현했으나 단위와 실제 브라우저 검증은 보류 상태다. 기본 OFF이고 탭에서만 유지한다. 영문 논리 키를 사용하며 입력/IME 조합·버튼·슬라이더·설정창 조작을 우선한다. 포커스·키 반복·IME별 이벤트 순서·Radix 메뉴와 native Undo/Space·모바일 레이아웃은 재개 시 확인해야 한다. 사용자 지정 키, Mute/Solo·수동 저장·Panic 키는 아직 제공하지 않는다.
 
 Tap Tempo의 계산기·BPM 제안·설정 적용·잠금·초기화를 구현했으나 단위·브라우저 검증은 보류 상태다. 4분음표 간격으로만 계산하고 빈 프로젝트 템포의 독립 저장·글로벌 Tap 단축키는 제공하지 않는다. 카운트인은 별도 브랜치에 있으므로 두 기능을 합친 상태의 잠금·초기화도 향후 확인해야 한다.
 
@@ -659,4 +674,4 @@ AudioContext·Worklet·마이크 입력·공통 시계·메트로놈과 8트랙�
 
 ## 다음 Codex 작업
 
-시작 시 `AGENTS.md`, [개발 로드맵](plan/README.md), [현재 작업 계획](plan/NEXT.md), 이 기록을 읽는다. 다음 기능은 기본 키보드 연주 조작이다. Tap Tempo와 1/2/4/8마디 녹음 길이는 구현 완료/미검증이며 카운트인은 별도 브랜치의 구현·미통합 상태다. 테스트 재개 요청 후 Phase 0의 `audio-engine.test.ts`·`audio-lifecycle.spec.ts`, 권한·환경 진단·장치 해제를 먼저 확인하고 Tap Tempo·길이별 PCM·오버더빙·이력·v1~v4→v5 저장 이전·믹서, `mixed-loop-lengths.test.ts`의 10분 DSP 시나리오와 `local-save.spec.ts`를 검증한다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 현재 저장 형식은 schemaVersion 5이고 v1/v2/v3/v4 읽기 이전을 지원한다. 다음 변경도 기존 데이터를 보존한다. 선택 길이는 준비 시작 시 고정하고 PCM 메타데이터의 ticks를 반복·오버더빙·이력 기준으로 유지한다. 후속 세부 범위는 NEXT.md를 따른다.
+시작 시 `AGENTS.md`, [개발 로드맵](plan/README.md), [현재 작업 계획](plan/NEXT.md), 이 기록을 읽는다. 다음 기능은 입력 채널 선택이다. 키보드 연주·Tap Tempo·1/2/4/8마디 녹음 길이는 구현 완료/미검증이며 카운트인은 별도 브랜치의 구현·미통합 상태다. 테스트 재개 요청 후 Phase 0의 `audio-engine.test.ts`·`audio-lifecycle.spec.ts`, 권한·환경 진단·장치 해제를 먼저 확인하고 `performance-keyboard.test.ts`·`keyboard-controls.spec.ts`, Tap Tempo·길이별 PCM·오버더빙·이력·v1~v4→v5 저장 이전·믹서, `mixed-loop-lengths.test.ts`의 10분 DSP 시나리오와 `local-save.spec.ts`를 검증한다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 현재 저장 형식은 schemaVersion 5이고 v1/v2/v3/v4 읽기 이전을 지원한다. 다음 변경도 기존 데이터를 보존한다. 선택 길이는 준비 시작 시 고정하고 PCM 메타데이터의 ticks를 반복·오버더빙·이력 기준으로 유지한다. 후속 세부 범위는 NEXT.md를 따른다.
