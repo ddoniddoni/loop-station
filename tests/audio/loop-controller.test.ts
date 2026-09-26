@@ -19,7 +19,7 @@ function fixture(bpm = 120, repository: LoopRepository | null = null) {
   const metadata: LoopMetadata = { ...config, sampleRate: 48000, frames: 48000 * 16 * 60 / bpm, ticks: 15360, complete: true };
   function status(sequence: number, phase: "empty" | "playing") {
     controller.accept({ type: "loop-status", sequence, phase, captureMode: null, recordedFrames: phase === "empty" ? 0 : metadata.frames,
-      totalFrames: phase === "empty" ? 0 : metadata.frames, position: 0, pendingPlay: false, issue: null });
+      totalFrames: phase === "empty" ? 0 : metadata.frames, position: 0, pendingPlay: false, pendingPlayback: null, issue: null });
   }
   function captured(sequence: number, mode: CaptureMode) {
     const bars = controller.getSnapshot().recordBars;

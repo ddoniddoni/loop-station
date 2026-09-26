@@ -1,6 +1,7 @@
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { ticksPerBar } from "../transport/timing";
 import { sameTempo } from "./station-protocol";
+import { isPlaybackTiming, playbackBoundary, type PendingPlayback, type PlaybackTiming } from "./playback-scheduling";
 import { isLoopMetadata, isRecordBars, loopBars, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type LoopMetadata, type LoopPhase } from "./loop-protocol";
 
 type OverdubPass = {
@@ -25,7 +26,7 @@ export class PcmLoop {
   private cycleStart = 0;
   private cycleEnd = 0;
   private position = 0;
-  private pendingPlay = false;
+  private pendingPlayback: PendingPlayback | null = null;
   private issue: string | null = null;
   private dirty = true;
   private overdub: OverdubPass | null = null;
@@ -36,6 +37,7 @@ export class PcmLoop {
 
   get locked(): boolean { return this.pcm !== null; }
   get capturing(): boolean { return this.overdub !== null || this.phase === "armed" || this.phase === "recording"; }
+  private get pendingPlay(): boolean { return this.pendingPlayback?.action === "play"; }
 
   reject(sequence: number, issue: string): void {
     if (!Number.isSafeInteger(sequence) || sequence <= this.sequence) return;
@@ -53,8 +55,11 @@ export class PcmLoop {
     switch (value.type) {
       case "loop-record": this.prepare(value, blockFrames, inputActive); break;
       case "loop-overdub": this.prepareOverdub(value, blockFrames, inputActive); break;
-      case "loop-play": this.play(blockFrames); break;
-      case "loop-stop": this.stop(); break;
+      case "loop-play":
+      case "loop-stop": this.requestPlayback(value, blockFrames); break;
+      case "loop-cancel-playback":
+        if (this.pendingPlayback && "targetSequence" in value && value.targetSequence === this.pendingPlayback.sequence) this.pendingPlayback = null;
+        break;
       case "loop-cancel":
         if ("captureMode" in value && value.captureMode === "overdub") this.abortOverdub(null);
         else this.clear();
@@ -105,24 +110,44 @@ export class PcmLoop {
     return tick;
   }
 
-  play(blockFrames: number): void {
-    if (!this.metadata?.complete || this.phase !== "stopped") return;
+  private requestPlayback(value: { type: unknown }, blockFrames: number): void {
+    const timing = "timing" in value ? value.timing : value.type === "loop-play" ? "bar" : "immediate";
+    if (!isPlaybackTiming(timing) || !Number.isSafeInteger(blockFrames) || blockFrames <= 0) {
+      this.issue = "재생·정지 실행 시점을 확인하세요.";
+      return;
+    }
+    if (value.type === "loop-play") this.play(blockFrames, timing);
+    else if (timing === "immediate") this.stop();
+    else if (this.capturing || this.revision || this.pendingPlayback) this.issue = "현재 녹음·편집·예약을 마친 뒤 정지를 예약하세요.";
+    else if (this.phase === "playing") {
+      if (!this.clock.playing) { this.stop(); return; }
+      this.pendingPlayback = { action: "stop", timing, sequence: this.sequence, ...playbackBoundary(this.clock, timing, blockFrames) };
+    }
+  }
+
+  play(blockFrames: number, timing: PlaybackTiming = "bar"): void {
+    if (!this.metadata?.complete || this.phase !== "stopped" || this.pendingPlayback || this.revision || blockFrames <= 0) return;
     this.clock.start();
-    this.playTick = this.nextBar(blockFrames);
+    this.pendingPlayback = { action: "play", timing, sequence: this.sequence, ...playbackBoundary(this.clock, timing, blockFrames) };
+    this.dirty = true;
+  }
+
+  private beginPlayback(tick: number): void {
+    this.playTick = tick;
     this.cycle = 0;
     this.setCycle();
     this.phase = "playing";
-    this.pendingPlay = true;
     this.dirty = true;
     this.position = 0;
   }
 
   stop(): void {
+    this.pendingPlayback = null;
+    this.dirty = true;
     if (this.capturing) this.interrupt();
     this.applyRevision();
     if (this.phase === "playing") {
       this.phase = "stopped";
-      this.pendingPlay = false;
       this.position = 0;
       this.dirty = true;
     }
@@ -155,6 +180,7 @@ export class PcmLoop {
     this.written = meta.frames;
     this.position = 0;
     this.phase = meta.complete ? "stopped" : "incomplete";
+    this.pendingPlayback = null;
     if (!sameTempo(this.clock.meter, meta)) this.clock.configure(meta);
   }
 
@@ -166,7 +192,7 @@ export class PcmLoop {
     this.metadata = null;
     this.written = 0;
     this.phase = "empty";
-    this.pendingPlay = false;
+    this.pendingPlayback = null;
     this.position = 0;
   }
 
@@ -177,6 +203,12 @@ export class PcmLoop {
   }
 
   nextSample(input: number | undefined, frame: number): number {
+    if (this.clock.playing && this.pendingPlayback && frame >= this.pendingPlayback.frame) {
+      const pending = this.pendingPlayback;
+      this.pendingPlayback = null;
+      if (pending.action === "stop") this.stop();
+      else this.beginPlayback(pending.tick);
+    }
     if (this.revision && frame >= this.revision.frame) this.applyRevision();
     if (!this.clock.playing || !this.pcm || !this.metadata) return 0;
     if (!this.overdub && this.capturing && frame >= this.startFrame) {
@@ -198,7 +230,6 @@ export class PcmLoop {
       return 0;
     }
     if (this.phase !== "playing" || frame < this.cycleStart) return 0;
-    if (this.pendingPlay) { this.pendingPlay = false; this.dirty = true; }
     if (frame >= this.cycleEnd) { this.cycle += 1; this.setCycle(); }
     this.position = (frame - this.cycleStart) / (this.cycleEnd - this.cycleStart);
     const source = this.position * this.metadata.frames;
@@ -224,7 +255,7 @@ export class PcmLoop {
   }
 
   private prepareOverdub(value: object, blockFrames: number, inputActive: boolean): void {
-    if (!this.metadata?.complete || this.phase !== "playing" || this.pendingPlay || this.capturing || this.revision || !inputActive || blockFrames <= 0
+    if (!this.metadata?.complete || this.phase !== "playing" || this.pendingPlayback || this.capturing || this.revision || !inputActive || blockFrames <= 0
       || !("pcm" in value) || !(value.pcm instanceof ArrayBuffer) || !("archive" in value) || !(value.archive instanceof ArrayBuffer)) {
       this.issue = "반복 재생과 마이크 연결을 확인한 뒤 오버더빙을 시작하세요.";
       return;
@@ -286,7 +317,7 @@ export class PcmLoop {
   }
 
   private scheduleRevision(value: object, blockFrames: number): void {
-    if (this.capturing || this.revision || !this.metadata?.complete
+    if (this.capturing || this.revision || this.pendingPlayback || !this.metadata?.complete
       || !("metadata" in value) || !isLoopMetadata(value.metadata) || !value.metadata.complete
       || !("pcm" in value) || !(value.pcm instanceof ArrayBuffer)) { this.rejectRevision(); return; }
     const meta = value.metadata;
@@ -338,7 +369,7 @@ export class PcmLoop {
       phase: pass ? (pass.written > 0 ? "overdubbing" : "armed") : this.phase,
       captureMode: pass ? "overdub" : this.capturing ? "record" : null,
       recordedFrames: pass?.written ?? this.written, totalFrames: pass ? pass.endFrame - pass.startFrame : this.metadata?.frames ?? 0,
-      position: this.position, pendingPlay: this.pendingPlay, issue: this.issue });
+      position: this.position, pendingPlay: this.pendingPlay, pendingPlayback: this.pendingPlayback, issue: this.issue });
     this.dirty = false;
   }
 }

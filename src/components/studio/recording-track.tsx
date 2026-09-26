@@ -8,6 +8,8 @@ import { StudioIcon } from "@/components/ui/studio-icon";
 import { saveStatusLabel } from "./loop-save-label";
 import { trackIsEditing, workspaceBlocksTrack } from "./track-availability";
 import { RecordingLength } from "./recording-length";
+import { LoopPlaybackButton, PlaybackTimingControls } from "./playback-controls";
+import { ko } from "@/lib/i18n/ko";
 
 function barsLabel(bars: number): string { return `${bars} ${bars === 1 ? "BAR" : "BARS"}`; }
 
@@ -26,11 +28,7 @@ function RecordingAction({ snapshot, inputReady, trackId }: { snapshot: LoopSnap
     </Button>;
   }
   if (snapshot.hasClip) {
-    const playing = snapshot.phase === "playing";
-    return <Button className="station-track-action" variant="outline" disabled={!snapshot.connected || !snapshot.metadata?.complete || (!playing && (snapshot.historyPending !== null || blocked))}
-      onClick={() => playing ? controller.stop() : controller.play()}>
-      <StudioIcon name={playing ? "stop" : "play"} size={16} />{playing ? "반복 정지" : "반복 재생"}
-    </Button>;
+    return <LoopPlaybackButton snapshot={snapshot} trackId={trackId} />;
   }
   return <Button className="station-track-action" variant="outline" disabled={!snapshot.connected || !inputReady || blocked} aria-describedby={`recording-hint-${trackId}`}
     onClick={() => void controller.record()}><span className="station-record-dot" /><span>[ RECORD {barsLabel(snapshot.recordBars)} ]<small>{snapshot.recordBars}마디 녹음</small></span></Button>;
@@ -56,6 +54,9 @@ function LoopEditControls({ snapshot, inputReady, trackId }: { snapshot: LoopSna
 }
 
 function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
+  if (snapshot.playbackSending) return ko.playbackSending;
+  const pending = snapshot.pendingPlayback;
+  if (pending) return `${ko.playbackTimings[pending.timing]} · ${pending.action === "play" ? ko.playbackPlayQueued : ko.playbackStopQueued}`;
   if (snapshot.workspaceIssue) return snapshot.workspaceIssue;
   if (snapshot.blockedByTrack !== null) return `${snapshot.blockedByTrack + 1}번 트랙 작업이 끝나면 녹음·편집할 수 있습니다.`;
   if (snapshot.save.editLocked) return `${saveStatusLabel(snapshot.save)} · 상단 로컬 저장 상태를 확인하세요.`;
@@ -66,7 +67,6 @@ function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
   if (snapshot.phase === "recording") return `입력 녹음 중 · ${snapshot.recordBars}마디 후 자동 반복`;
   if (snapshot.phase === "overdubbing") return "오버더빙 중 · 한 바퀴 후 자동 확정";
   if (snapshot.phase === "incomplete") return "중단된 녹음 · 부분 데이터 보관 중";
-  if (snapshot.pendingPlay) return "다음 마디에서 재생 시작";
   if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크를 연결하세요.";
   if (snapshot.canRestore) return "비운 루프 복구 가능 · 다음 녹음 완료 전까지";
   if (!inputReady) return "입력 설정에서 마이크를 연결하세요.";
@@ -94,10 +94,11 @@ export function RecordingTrack({ trackId, name, tone, selected, onSelect }: { tr
       <article className="station-track-card station-recording-track" data-tone={tone} data-track={number} data-bank={trackId < 4 ? 0 : 1} data-selected={selected} data-recording={snapshot.phase === "recording" || snapshot.phase === "overdubbing"} aria-label={`${number} ${name} 녹음 트랙`}>
         <div className="station-track-header">
           <Heading as="h3" size="3"><button type="button" className="station-track-select" aria-pressed={selected} onClick={onSelect} aria-label={`${number} ${name} 트랙 선택`}><i aria-hidden="true" /><span><b>{number}</b> {name}</span></button></Heading>
-          <span className="station-track-state">{snapshot.pendingPlay || snapshot.historyPending ? "QUEUED" : labels[snapshot.phase]}</span>
+          <span className="station-track-state">{snapshot.historyPending ? `${labels[snapshot.phase]} · QUEUED` : labels[snapshot.phase]}</span>
         </div>
         <RecordingWindow snapshot={snapshot} />
         <RecordingLength trackId={trackId} snapshot={snapshot} />
+        <PlaybackTimingControls trackId={trackId} snapshot={snapshot} />
         <LoopEditControls trackId={trackId} snapshot={snapshot} inputReady={inputReady} />
         <RecordingAction trackId={trackId} snapshot={snapshot} inputReady={inputReady} />
         <p id={`recording-hint-${trackId}`} className="station-recording-hint" role="status">{recordingHint(snapshot, inputReady)}</p>

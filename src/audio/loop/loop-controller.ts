@@ -4,6 +4,7 @@ import { LoopHistory, type CachedLoop, type HistoryDirection, type LoopHistorySt
 import { IndexedDbLoopRepository } from "../storage/indexed-db-loop-repository";
 import { initialSaveState, LoopPersistence, type LoopSaveState } from "../storage/loop-persistence";
 import type { LoopRepository } from "../storage/loop-session";
+import { isPlaybackTiming, type PendingPlayback, type PlaybackAction, type PlaybackTiming } from "./playback-scheduling";
 import { isLoopMetadata, isLoopStatus, isRecordBars, loopBars, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type CaptureMode, type LoopMetadata, type LoopPhase, type LoopStatus, type RecordBars } from "./loop-protocol";
 
 export type LoopWorkspace = {
@@ -32,6 +33,10 @@ export type LoopSnapshot = {
   metadata: LoopMetadata | null;
   progress: number;
   pendingPlay: boolean;
+  pendingPlayback: PendingPlayback | null;
+  playbackSending: boolean;
+  playTiming: PlaybackTiming;
+  stopTiming: PlaybackTiming;
   issue: string | null;
   storageNote: string | null;
   save: LoopSaveState;
@@ -43,6 +48,7 @@ const initialSnapshot: LoopSnapshot = {
   phase: "empty", captureMode: null, connected: false, hasClip: false, canRestore: false,
   canUndo: false, canRedo: false, historyPending: null, metadata: null,
   progress: 0, pendingPlay: false, issue: null, storageNote: null,
+  pendingPlayback: null, playbackSending: false, playTiming: "bar", stopTiming: "immediate",
   save: initialSaveState, blockedByTrack: null, workspaceIssue: null,
 };
 
@@ -92,7 +98,7 @@ export class LoopController {
   refreshWorkspace(): void { this.update({}, false); }
   hydrate(state: LoopHistoryState): void {
     this.history.hydrate(state);
-    this.update({ phase: this.idlePhase(), progress: 0, pendingPlay: false });
+    this.update({ phase: this.idlePhase(), progress: 0, pendingPlay: false, pendingPlayback: null, playbackSending: false });
     this.sendCached();
   }
   private persist(): void {
@@ -116,7 +122,7 @@ export class LoopController {
   };
   get locked(): boolean { return this.snapshot.hasClip || this.busy; }
   get dirty(): boolean { return this.persistence.dirty || this.pendingCapture !== null || this.pendingHistory !== null; }
-  private get busy(): boolean { return this.workspace?.getIssue() != null || this.blockedByTrack !== null || this.saveState.editLocked || this.pendingCapture !== null || this.pendingHistory !== null || isCapturePhase(this.snapshot.phase); }
+  private get busy(): boolean { return this.workspace?.getIssue() != null || this.blockedByTrack !== null || this.saveState.editLocked || this.pendingCapture !== null || this.pendingHistory !== null || isCapturePhase(this.snapshot.phase) || this.snapshot.playbackSending || this.snapshot.pendingPlayback !== null; }
 
   attach(context: AudioContext, node: AudioWorkletNode): void {
     this.context = context;
@@ -126,7 +132,7 @@ export class LoopController {
     this.pendingHistory = null;
     this.bufferReady = !this.history.current;
     this.generation += 1;
-    this.update({ connected: context.state === "running", issue: null, captureMode: null });
+    this.update({ connected: context.state === "running", issue: null, captureMode: null, pendingPlayback: null, pendingPlay: false, playbackSending: false });
     this.unsubscribeInput = this.input.subscribe(() => {
       const input = this.input.getSnapshot();
       if (this.pendingCapture && (!input.routed || input.phase !== "active")) this.interrupt();
@@ -144,7 +150,7 @@ export class LoopController {
     this.node = null;
     this.context = null;
     this.transport = null;
-    this.update({ connected: false, phase: this.idlePhase(), captureMode: null, progress: 0, pendingPlay: false,
+    this.update({ connected: false, phase: this.idlePhase(), captureMode: null, progress: 0, pendingPlay: false, pendingPlayback: null, playbackSending: false,
       issue: interrupted ? "오디오가 종료되어 미확정 녹음을 취소했습니다. 이전에 확정한 루프는 이 탭에 남아 있습니다." : this.snapshot.issue });
   }
 
@@ -152,7 +158,8 @@ export class LoopController {
     if (!running) {
       this.interrupt();
       this.command("loop-stop");
-      if (this.snapshot.phase === "playing") this.update({ phase: "stopped", progress: 0 });
+      this.update({ phase: this.snapshot.phase === "playing" ? "stopped" : this.snapshot.phase, progress: 0,
+        pendingPlayback: null, pendingPlay: false, playbackSending: false });
     }
     this.update({ connected: running && this.bufferReady });
   }
@@ -175,7 +182,7 @@ export class LoopController {
     if (this.pendingCapture?.sequence === null) return;
     if (!isCapturePhase(value.phase)) this.pendingCapture = null;
     this.update({ phase: value.phase, captureMode: value.captureMode, progress: value.position,
-      pendingPlay: value.pendingPlay, issue: value.issue });
+      pendingPlay: value.pendingPlay, pendingPlayback: value.pendingPlayback, playbackSending: false, issue: value.issue });
   }
 
   private acceptCapture(value: object): void {
@@ -276,11 +283,41 @@ export class LoopController {
   }
 
   play(): void {
-    if (!this.busy && this.history.current?.metadata.complete && this.snapshot.connected && this.snapshot.phase === "stopped") this.command("loop-play");
+    if (!this.busy && this.history.current?.metadata.complete && this.snapshot.connected && this.snapshot.phase === "stopped") {
+      this.sendPlayback("loop-play", this.snapshot.playTiming);
+    }
   }
+
+  setPlaybackTiming(action: PlaybackAction, timing: PlaybackTiming): void {
+    if ((action !== "play" && action !== "stop") || !isPlaybackTiming(timing) || this.busy || !this.history.current?.metadata.complete) return;
+    this.update(action === "play" ? { playTiming: timing } : { stopTiming: timing });
+  }
+
+  stopPlayback(): void {
+    if (!this.snapshot.connected || this.snapshot.phase !== "playing" || this.pendingCapture || this.pendingHistory
+      || this.snapshot.playbackSending || this.snapshot.pendingPlayback) return;
+    this.sendPlayback("loop-stop", this.snapshot.stopTiming);
+  }
+
+  cancelPlayback(): void {
+    const pending = this.snapshot.pendingPlayback;
+    if (!pending || !this.snapshot.connected || this.snapshot.playbackSending) return;
+    this.sendPlayback("loop-cancel-playback", undefined, pending.sequence);
+  }
+
+  private sendPlayback(type: "loop-play" | "loop-stop" | "loop-cancel-playback", timing?: PlaybackTiming, targetSequence?: number): void {
+    if (!this.node) return;
+    const sequence = ++this.sequence;
+    // Only command delivery is optimistic. Playing/stopped and scheduled frames
+    // continue to come from the processor's matching status.
+    this.update({ playbackSending: true, issue: null });
+    this.node.port.postMessage({ trackId: this.workspace?.trackId, type, sequence, timing, targetSequence });
+  }
+
+  // Transport stop, reset and lifecycle interruption always bypass track timing.
   stop(): void {
     if (this.pendingCapture?.sequence === null) this.cancel();
-    this.command("loop-stop");
+    this.sendPlayback("loop-stop", "immediate");
   }
 
   clear(): void {
@@ -288,7 +325,7 @@ export class LoopController {
     this.history.clear();
     this.bufferReady = true;
     this.command("loop-clear");
-    this.update({ phase: "empty", progress: 0, pendingPlay: false, issue: null, connected: this.context?.state === "running" });
+    this.update({ phase: "empty", progress: 0, pendingPlay: false, pendingPlayback: null, playbackSending: false, issue: null, connected: this.context?.state === "running" });
     this.persist();
   }
 

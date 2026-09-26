@@ -84,6 +84,9 @@ describe("audio engine startup and resource ownership", () => {
   });
 
   it.each([
+    { version: 1, sampleRate: 48000, blockFrames: 192 },
+    { version: 2, sampleRate: 48000, blockFrames: 192 },
+    { version: 3, sampleRate: 48000, blockFrames: 192 },
     { version: WORKLET_PROTOCOL_VERSION + 1, sampleRate: 48000, blockFrames: 192 },
     { version: WORKLET_PROTOCOL_VERSION, sampleRate: 44100, blockFrames: 192 },
     { version: WORKLET_PROTOCOL_VERSION, sampleRate: 48000, blockFrames: 0 },

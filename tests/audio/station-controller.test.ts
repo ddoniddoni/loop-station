@@ -25,7 +25,7 @@ function fixture(repository: SessionRepository<StationProject> | null = null, ra
     station.accept({ type: "loop-captured", trackId, sequence, captureMode: "record", metadata,
       pcm: new Float32Array(recordingCapacity(8000, config)).fill(0.25).buffer });
     station.accept({ type: "loop-status", trackId, sequence, phase: "playing", captureMode: null,
-      recordedFrames: 64000, totalFrames: 64000, position: 0, pendingPlay: false, issue: null });
+      recordedFrames: 64000, totalFrames: 64000, position: 0, pendingPlay: false, pendingPlayback: null, issue: null });
   }
   return { station, input, messages, captured };
 }

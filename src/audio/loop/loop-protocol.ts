@@ -1,5 +1,6 @@
 import { isTransportConfig, type TransportConfig } from "../transport/audio-frame-clock";
 import { PPQ, ticksPerBar } from "../transport/timing";
+import { isPendingPlayback, type PendingPlayback } from "./playback-scheduling";
 
 export const RECORD_BARS = 4;
 export const RECORD_LENGTHS = [1, 2, 4, 8] as const;
@@ -17,6 +18,7 @@ export type LoopStatus = {
   totalFrames: number;
   position: number;
   pendingPlay: boolean;
+  pendingPlayback: PendingPlayback | null;
   captureMode: CaptureMode | null;
   issue: string | null;
 };
@@ -54,6 +56,10 @@ export function isLoopStatus(value: unknown): value is LoopStatus {
     && "totalFrames" in value && typeof value.totalFrames === "number" && Number.isSafeInteger(value.totalFrames) && value.totalFrames >= value.recordedFrames
     && "position" in value && typeof value.position === "number" && Number.isFinite(value.position) && value.position >= 0 && value.position <= 1
     && "pendingPlay" in value && typeof value.pendingPlay === "boolean"
+    && "pendingPlayback" in value && isPendingPlayback(value.pendingPlayback)
+    && value.pendingPlay === (value.pendingPlayback?.action === "play")
+    && (value.pendingPlayback === null || (value.pendingPlayback.sequence <= value.sequence
+      && value.phase === (value.pendingPlayback.action === "play" ? "stopped" : "playing")))
     && "captureMode" in value && (value.captureMode === null || value.captureMode === "record" || value.captureMode === "overdub")
     && "issue" in value && (value.issue === null || typeof value.issue === "string");
 }
