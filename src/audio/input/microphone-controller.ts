@@ -1,4 +1,5 @@
 import { isInputMeterSnapshot, type InputMeterSnapshot } from "./input-meter";
+import { isInputMonitorApplied, isInputMonitorMode, type InputMonitorMode } from "./input-monitor";
 import { MicrophoneInputBus } from "./microphone-input-bus";
 import { MicrophoneError, MicrophoneSession, type MicrophoneDevice, type MicrophoneErrorCode, type MicrophoneInfo } from "./microphone-session";
 
@@ -13,7 +14,8 @@ export type MicrophoneSnapshot = {
   audioReady: boolean;
   routed: boolean;
   gainDb: number;
-  monitorEnabled: boolean;
+  monitorMode: InputMonitorMode;
+  monitorPending: InputMonitorMode | null;
   monitorVolume: number;
   captureLocked: boolean;
   meter: InputMeterSnapshot | null;
@@ -21,7 +23,7 @@ export type MicrophoneSnapshot = {
 
 const initialSnapshot: MicrophoneSnapshot = {
   phase: "idle", info: null, devices: [], issue: null, listUnavailable: false,
-  audioReady: false, routed: false, gainDb: 0, monitorEnabled: false, monitorVolume: 20, meter: null, captureLocked: false,
+  audioReady: false, routed: false, gainDb: 0, monitorMode: "off", monitorPending: null, monitorVolume: 20, meter: null, captureLocked: false,
 };
 
 // Browser objects stay here; React subscribes only to the lightweight snapshot.
@@ -30,6 +32,7 @@ export class MicrophoneController {
   private bus: MicrophoneInputBus | null = null;
   private node: AudioWorkletNode | null = null;
   private revision = 0;
+  private monitorSequence = 0;
   private requestVersion = 0;
   private snapshot = initialSnapshot;
   private readonly listeners = new Set<() => void>();
@@ -45,13 +48,13 @@ export class MicrophoneController {
     this.bus = new MicrophoneInputBus(context, node);
     this.node = node;
     this.bus.setGain(this.snapshot.gainDb);
-    this.update({ audioReady: context.state === "running", monitorEnabled: false });
+    this.update({ audioReady: context.state === "running" });
     this.routeInput();
   }
 
   setAudioRunning(running: boolean): void {
-    this.bus?.setMonitor(0, true);
-    this.update({ audioReady: running, monitorEnabled: false, meter: null });
+    this.disableMonitor();
+    this.update({ audioReady: running, meter: null });
     this.resetMeter();
   }
 
@@ -66,6 +69,13 @@ export class MicrophoneController {
   acceptMeter(value: unknown): void {
     if (!this.snapshot.audioReady || !this.snapshot.routed || !isInputMeterSnapshot(value) || value.revision !== this.revision) return;
     this.update({ meter: value });
+  }
+
+  acceptMonitor(value: unknown): void {
+    if (!this.canControl() || !isInputMonitorApplied(value) || value.revision !== this.revision
+      || value.sequence !== this.monitorSequence || value.mode !== this.snapshot.monitorPending) return;
+    this.bus?.setMonitor(value.mode === "off" ? 0 : this.snapshot.monitorVolume / 100);
+    this.update({ monitorMode: value.mode, monitorPending: null });
   }
 
   async request(deviceId?: string): Promise<void> {
@@ -118,19 +128,19 @@ export class MicrophoneController {
     this.update({ gainDb: db });
   }
 
-  setMonitor(enabled: boolean): void {
-    if (!enabled) {
-      this.bus?.setMonitor(0);
-      this.update({ monitorEnabled: false });
-    } else if (this.canControl()) {
-      this.bus?.setMonitor(this.snapshot.monitorVolume / 100);
-      this.update({ monitorEnabled: true });
-    }
+  setMonitorMode(mode: InputMonitorMode): void {
+    if (!isInputMonitorMode(mode)) return;
+    if (mode === "off") { this.disableMonitor(); return; }
+    if (!this.canControl()) return;
+    // Keep the physical output closed until this exact mode/route is acknowledged.
+    this.bus?.setMonitor(0, true);
+    this.update({ monitorMode: "off", monitorPending: mode });
+    this.sendMonitorMode(mode);
   }
 
   setMonitorVolume(volume: number): void {
     if (!Number.isFinite(volume) || volume < 0 || volume > 100 || !this.canControl()) return;
-    if (this.snapshot.monitorEnabled) this.bus?.setMonitor(volume / 100);
+    if (this.snapshot.monitorMode !== "off" && this.snapshot.monitorPending === null) this.bus?.setMonitor(volume / 100);
     this.update({ monitorVolume: volume });
   }
 
@@ -185,7 +195,13 @@ export class MicrophoneController {
 
   private disableMonitor(): void {
     this.bus?.setMonitor(0, true);
-    this.update({ monitorEnabled: false });
+    this.update({ monitorMode: "off", monitorPending: null });
+    this.sendMonitorMode("off");
+  }
+
+  private sendMonitorMode(mode: InputMonitorMode): void {
+    this.monitorSequence += 1;
+    this.node?.port.postMessage({ type: "input-monitor", mode, revision: this.revision, sequence: this.monitorSequence });
   }
 
   private update(patch: Partial<MicrophoneSnapshot>): void {

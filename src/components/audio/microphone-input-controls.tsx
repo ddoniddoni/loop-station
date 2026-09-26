@@ -1,9 +1,10 @@
 "use client";
 
-import { Badge, Button, Slider, Switch, Text } from "@radix-ui/themes";
+import { Button, Slider, Text } from "@radix-ui/themes";
 import type { MicrophoneController, MicrophoneSnapshot } from "@/audio/input/microphone-controller";
 import type { InputMeterSnapshot } from "@/audio/input/input-meter";
 import { ko } from "@/lib/i18n/ko";
+import { InputMonitorControls } from "./input-monitor-controls";
 
 function decibels(amplitude: number): number {
   return amplitude > 0 ? 20 * Math.log10(amplitude) : -Infinity;
@@ -70,23 +71,7 @@ export function MicrophoneInputControls({ controller, snapshot }: {
           onValueChange={(values) => controller.setGain(values[0] ?? 0)} />
         <Text as="p" id="input-gain-hint" size="1" color="gray">{ko.inputGainHint}</Text>
       </div>
-      <div className="station-input-monitor">
-        <div className="station-input-heading">
-          <label htmlFor="input-monitor-enabled"><Text as="span" size="2">{ko.inputMonitor}</Text></label>
-          <Badge color={snapshot.monitorEnabled ? "jade" : "gray"} variant="soft">{snapshot.monitorEnabled ? ko.microphoneSettingOn : ko.microphoneSettingOff}</Badge>
-          <Switch id="input-monitor-enabled" size="3" checked={snapshot.monitorEnabled} disabled={!ready}
-            aria-describedby="input-monitor-hint" onCheckedChange={(enabled) => controller.setMonitor(enabled)} />
-        </div>
-        <Text as="p" id="input-monitor-hint" size="1" color="gray">{ko.inputMonitorHint}</Text>
-        <div className="station-input-heading">
-          <Text as="span" id="input-monitor-volume-label" size="2">{ko.inputMonitorVolume}</Text>
-          <span className="station-input-number">{snapshot.monitorVolume}%</span>
-        </div>
-        <Slider aria-labelledby="input-monitor-volume-label" aria-valuetext={`${snapshot.monitorVolume}%`}
-          min={0} max={100} step={1} value={[snapshot.monitorVolume]} disabled={!ready}
-          onValueChange={(values) => controller.setMonitorVolume(values[0] ?? 20)} />
-        <Text as="p" size="1" color="gray">{ko.inputMonitorResetHint}</Text>
-      </div>
+      <InputMonitorControls controller={controller} snapshot={snapshot} ready={ready} />
     </div>
   );
 }

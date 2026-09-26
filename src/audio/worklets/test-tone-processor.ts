@@ -1,5 +1,6 @@
 import { ClickVoice } from "../metronome/click-voice";
 import { InputLevelMeter } from "../input/input-meter";
+import { InputMonitorGate } from "../input/input-monitor";
 import { PcmStation } from "../loop/pcm-station";
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { PPQ } from "../transport/timing";
@@ -29,6 +30,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
   private transportDirty = true;
   private framesSinceSnapshot = 0;
   private readonly inputMeter = new InputLevelMeter();
+  private readonly inputMonitor = new InputMonitorGate();
   private inputRevision = 0;
   private inputActive = false;
   private inputFramesSinceSnapshot = 0;
@@ -68,6 +70,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
         this.metronomeEnabled = data.enabled;
         this.metronomeDirty = true;
       } else if (data.type === "input-route" && "revision" in data && typeof data.revision === "number" && Number.isSafeInteger(data.revision) && "active" in data && typeof data.active === "boolean") {
+        if (!this.inputMonitor.route(data.revision, data.active)) return;
         this.loop.interrupt();
         this.inputRevision = data.revision;
         this.inputActive = data.active;
@@ -75,6 +78,9 @@ class TestToneProcessor extends AudioWorkletProcessor {
         this.inputMeter.reset();
       } else if (data.type === "input-clear-clip" && "revision" in data && data.revision === this.inputRevision) {
         this.inputMeter.clearClip();
+      } else if (data.type === "input-monitor") {
+        const applied = this.inputMonitor.configure(data);
+        if (applied) this.port.postMessage(applied);
       }
     };
   }
@@ -111,7 +117,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
       if (loopRight && frame < loopRight.length) loopRight[frame] = this.loop.right;
       if (inputSample !== undefined) this.inputMeter.add(sample);
       // Monitor limiting never changes the PCM captured by the loop above.
-      if (monitor && frame < monitor.length) monitor[frame] = Math.max(-1, Math.min(1, sample));
+      if (monitor && frame < monitor.length) monitor[frame] = this.inputMonitor.nextSample(sample, this.loop.inputCaptured);
       if (blockPositionFrame + frame === nextBeatFrame) {
         this.click.trigger(nextBeatIndex % this.clock.meter.numerator === 0);
         nextBeatIndex += 1;

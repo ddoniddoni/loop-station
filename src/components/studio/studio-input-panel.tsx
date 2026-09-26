@@ -19,7 +19,7 @@ export function StudioInputPanel() {
         <div className="station-preamp-controls">
           <span className="station-knob" aria-hidden="true" style={{transform: `rotate(${input.gainDb * 4}deg)`}} />
           <div><span>GAIN</span><strong>{input.gainDb > 0 ? "+" : ""}{input.gainDb.toFixed(1)} dB</strong></div>
-          <div className="station-preamp-monitor"><span>MONITOR</span><strong data-active={input.monitorEnabled}>{input.monitorEnabled ? "ON" : "OFF"}</strong></div>
+          <div className="station-preamp-monitor"><span>MONITOR</span><strong data-active={input.monitorMode !== "off"}>{input.monitorPending ? "…" : input.monitorMode.toUpperCase()}</strong></div>
         </div>
         {db !== null && <meter min={-60} max={0} value={Math.max(-60, Math.min(0, db))} aria-label="마이크 입력 피크" />}
         <Dialog.Root>

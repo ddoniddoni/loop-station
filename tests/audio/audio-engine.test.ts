@@ -40,7 +40,7 @@ function fixture() {
   vi.stubGlobal("AudioContext", Context);
   vi.stubGlobal("AudioWorkletNode", Node);
   const callbacks = { onContextStateChange: vi.fn(), onToneStateChange: vi.fn(), onTransportStateChange: vi.fn(), onMetronomeStateChange: vi.fn(), onProcessorError: vi.fn() };
-  const input = { attachAudio: vi.fn(), detachAudio: vi.fn(), setAudioRunning: vi.fn(), acceptMeter: vi.fn() };
+  const input = { attachAudio: vi.fn(), detachAudio: vi.fn(), setAudioRunning: vi.fn(), acceptMeter: vi.fn(), acceptMonitor: vi.fn() };
   const loop = { attach: vi.fn(), detach: vi.fn(), setRunning: vi.fn(), accept: vi.fn(), acceptTransport: vi.fn(), stop: vi.fn(), locked: false };
   const engine = new TestToneEngine(callbacks, input as unknown as MicrophoneController, loop as unknown as StationController);
   const ready = () => nodes[0].send({ type: "worklet-ready", version: WORKLET_PROTOCOL_VERSION, sampleRate: 48000, blockFrames: 192 });
@@ -64,6 +64,9 @@ describe("audio engine startup and resource ownership", () => {
     f.ready(); await start;
     expect(f.engine.isReady).toBe(true);
     expect(f.input.attachAudio).toHaveBeenCalledOnce();
+    const applied = { type: "input-monitor-applied", revision: 1, sequence: 2, mode: "auto" };
+    f.nodes[0].send(applied);
+    expect(f.input.acceptMonitor).toHaveBeenCalledWith(applied);
     expect(f.loop.attach).toHaveBeenCalledOnce();
     f.engine.startTone();
     expect(f.nodes[0].port.postMessage).toHaveBeenCalledWith({ type: "start" });
@@ -85,6 +88,8 @@ describe("audio engine startup and resource ownership", () => {
 
   it.each([
     { version: WORKLET_PROTOCOL_VERSION + 1, sampleRate: 48000, blockFrames: 192 },
+    { version: 1, sampleRate: 48000, blockFrames: 192 },
+    { version: 2, sampleRate: 48000, blockFrames: 192 },
     { version: WORKLET_PROTOCOL_VERSION, sampleRate: 44100, blockFrames: 192 },
     { version: WORKLET_PROTOCOL_VERSION, sampleRate: 48000, blockFrames: 0 },
   ])("rejects incompatible processor readiness %j", async (fields) => {

@@ -30,6 +30,8 @@ export class PcmLoop {
   private dirty = true;
   private overdub: OverdubPass | null = null;
   private revision: PendingRevision | null = null;
+  /** True only when nextSample wrote this exact frame, including a take's last frame. */
+  inputCaptured = false;
 
   constructor(private readonly clock: AudioFrameClock, private readonly rate: number,
     private readonly port: { postMessage(message: unknown, transfer?: Transferable[]): void }) {}
@@ -177,12 +179,14 @@ export class PcmLoop {
   }
 
   nextSample(input: number | undefined, frame: number): number {
+    this.inputCaptured = false;
     if (this.revision && frame >= this.revision.frame) this.applyRevision();
     if (!this.clock.playing || !this.pcm || !this.metadata) return 0;
     if (!this.overdub && this.capturing && frame >= this.startFrame) {
       if (input === undefined || !Number.isFinite(input)) { this.interrupt(); return 0; }
       if (this.phase === "armed") { this.phase = "recording"; this.dirty = true; }
       this.pcm[this.written] = input;
+      this.inputCaptured = true;
       if (this.archive) this.archive[this.written] = input;
       this.written += 1;
       this.position = this.written / this.metadata.frames;
@@ -263,6 +267,7 @@ export class PcmLoop {
     if (!Number.isFinite(sample)) { this.abortOverdub("입력 레벨이 너무 커 오버더빙을 취소했습니다."); return; }
     if (pass.written === 0) this.dirty = true;
     pass.pcm[pass.written] = sample;
+    this.inputCaptured = true;
     pass.archive[pass.written] = sample;
     pass.written += 1;
     if (frame + 1 === pass.endFrame) {

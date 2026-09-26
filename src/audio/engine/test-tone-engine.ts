@@ -132,6 +132,7 @@ export class TestToneEngine {
         return;
       }
       this.input.acceptMeter(data);
+      this.input.acceptMonitor(data);
       this.loop.accept(data);
       if (isTransportSnapshot(data)) {
         this.loop.acceptTransport(data);
