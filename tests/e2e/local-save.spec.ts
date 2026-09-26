@@ -13,13 +13,13 @@ async function recordLoop(page: Page, bars = 4) {
   await page.getByRole("button", { name: "오디오 시작", exact: true }).click();
   await expect(page.getByRole("button", { name: ko.toneStart, exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  const settings = page.getByRole("button", { name: "Settings", exact: true });
+  const settings = page.getByRole("button", { name: "입력·트랙 설정", exact: true });
   if (await settings.isVisible()) await settings.click();
   await page.getByRole("button", { name: "입력 설정", exact: true }).click();
   await page.getByRole("button", { name: "마이크 사용 허용", exact: true }).click();
   await expect(page.getByText(ko.microphoneActive, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "입력 설정 닫기" }).click();
-  const loops = page.getByRole("button", { name: "Loops", exact: true });
+  const loops = page.getByRole("button", { name: "트랙", exact: true });
   if (await loops.isVisible()) await loops.click();
   const track = page.locator('[data-track="01"]');
   if (bars !== 4) {
@@ -56,6 +56,26 @@ test("recorded PCM restores after reload without automatically starting audio", 
   await page.reload();
   await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "반복 재생", exact: true })).toBeDisabled();
+  expect(await storedFingerprint(page)).toEqual(before);
+});
+
+test("project navigation preserves the live audio session and saved PCM", async ({ page }) => {
+  await recordLoop(page, 1);
+  const before = await storedFingerprint(page);
+  const first = page.locator('[data-track="01"]');
+  await expect(first.locator(".station-track-state")).toHaveText("PLAYING");
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await expect(page).toHaveURL(/\/projects$/);
+  await expect(page.getByRole("heading", { name: "로컬 프로젝트", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "마이크 설정", exact: true })).toBeVisible();
+  await expect(page.getByText("1 / 8 트랙", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "작업 이어하기", exact: true }).click();
+  await expect(first.locator(".station-track-state")).toHaveText("PLAYING");
+  expect(await storedFingerprint(page)).toEqual(before);
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "로컬 프로젝트", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "마이크 연결", exact: true })).toBeVisible();
   expect(await storedFingerprint(page)).toEqual(before);
 });
 

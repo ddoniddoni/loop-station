@@ -123,7 +123,7 @@ export class LoopPersistence<State = LoopHistoryState> {
   }
   private set(patch: Partial<LoopSaveState>): void {
     const savedAtLabel = patch.savedAt === undefined ? this.state.savedAtLabel
-      : patch.savedAt === null ? null : new Date(patch.savedAt).toLocaleTimeString("ko-KR");
+      : patch.savedAt === null ? null : new Date(patch.savedAt).toLocaleString("ko-KR");
     this.state = { ...this.state, ...patch, savedAtLabel };
     this.notify();
   }

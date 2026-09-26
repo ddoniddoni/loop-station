@@ -1,12 +1,13 @@
 "use client";
 
-import { Button, Dialog, Flex, Heading, Text } from "@radix-ui/themes";
+import { Button, Heading } from "@radix-ui/themes";
 import { useSyncExternalStore } from "react";
 import { useMicrophoneController } from "@/components/audio/audio-engine-provider";
-import { MicrophoneSetup } from "@/components/audio/microphone-setup";
+import { useStudioView } from "./studio-view-provider";
 import { StudioIcon } from "@/components/ui/studio-icon";
 
 export function StudioInputPanel() {
+  const { setInputOpen } = useStudioView();
   const controller = useMicrophoneController();
   const input = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getServerSnapshot);
   const peak = input.meter?.receiving ? input.meter.peak : null;
@@ -22,18 +23,7 @@ export function StudioInputPanel() {
           <div className="station-preamp-monitor"><span>MONITOR</span><strong data-active={input.monitorEnabled}>{input.monitorEnabled ? "ON" : "OFF"}</strong></div>
         </div>
         {db !== null && <meter min={-60} max={0} value={Math.max(-60, Math.min(0, db))} aria-label="마이크 입력 피크" />}
-        <Dialog.Root>
-          <Dialog.Trigger><Button variant="outline" color="gray" className="station-input-open"><StudioIcon name="settings" size={15} />입력 설정</Button></Dialog.Trigger>
-          <Dialog.Content maxWidth="520px" className="station-overlay station-input-dialog">
-            <Flex align="center" justify="between" gap="3">
-              <Dialog.Title mb="0">입력 장치와 모니터링</Dialog.Title>
-              <Dialog.Close><Button variant="soft" color="gray" aria-label="입력 설정 닫기">닫기</Button></Dialog.Close>
-            </Flex>
-            <Dialog.Description size="2" mt="2" mb="4">마이크 연결, 입력 게인과 내 소리 듣기를 조절합니다.</Dialog.Description>
-            <MicrophoneSetup />
-            <Text as="p" size="1" color="gray" mt="4">이 창을 닫아도 연결은 유지됩니다. 연결을 끊으려면 마이크 해제를 누르세요.</Text>
-          </Dialog.Content>
-        </Dialog.Root>
+        <Button variant="outline" color="gray" className="station-input-open" onClick={() => setInputOpen(true)}><StudioIcon name="settings" size={15} />입력 설정</Button>
       </div>
     </section>
   );

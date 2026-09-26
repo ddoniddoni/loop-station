@@ -4,7 +4,7 @@
 
 - 기준일: 2026-09-27
 - 프로젝트 상태: **프로젝트 기본 구성 완료. Phase 0/1은 부분 구현·미검증. Phase 2는 공통 시계의 8트랙 녹음·반복·오버더빙·Undo/Redo·프로젝트 저장·트랙 볼륨/팬/Mute/Solo·루프 마스터·출력 미터·1/2/4/8마디 선택까지 부분 구현·미검증.**
-- 프로젝트 위치: `/Users/ddoni/dev/loop-station`, 현재 브랜치 develop. Tap Tempo에 이어 `feature/phase-2-recording-length`의 `97f7eff`를 통합함. 파일 백업과 Git stash에 이전 미커밋 작업 원본도 보관함.
+- 프로젝트 위치: `/Users/ddoni/dev/loop-station`, 현재 브랜치 `fix/studio-navigation` (최신 원격 develop `e569efc` 기준). Tap Tempo에 이어 `feature/phase-2-recording-length`의 `97f7eff`를 통합함. 파일 백업과 Git stash에 이전 미커밋 작업 원본도 보관함.
 - UI 기반: Radix Themes 3.3.0과 Stitch 콘솔 배치를 유지함. 01–08 모든 트랙에 1/2/4/8마디 선택 녹음·반복·오버더빙·Undo/Redo·비우기·복구를 연결함. 모바일 Bank 1–4/5–8와 선택 트랙 상세 정보 지원. LOCAL에서 프로젝트 저장 상태와 재시도 제공. 트랙별 볼륨·팬·Mute·Solo, 루프 마스터 볼륨·음소거, 트랙/마스터 출력 미터·피크 홀드·과부하 경고, 믹서 Bank 전환과 v5 프로젝트 저장/복구를 연결함. FX는 미구현.
 - 검증: 이전 Radix 작업의 단위 테스트 21개와 Chromium E2E 2개 통과 기록은 아래 로그 참조. 이후 사용자 요청에 따라 테스트 실행을 중단함. PCM 녹음 테스트 9개, 오버더빙·이력·명령 처리 테스트 21개, 저장 관련 단위 테스트 10개, 다중 트랙 단위 테스트 12개와 저장 E2E 시나리오 3개는 작성만 했음. 실제 녹음·Worklet·권한·장치·실청취·IndexedDB 저장/복구는 미검증.
 - 이전 믹서 검증: 앞선 단위 11개·E2E 2개에 스테레오/미터 관련 단위 8개와 실제 Worklet 좌우 출력 E2E 1개를 추가 작성했으며 모두 미실행. 린트·타입 검사·빌드·React Doctor 실제 결과는 2026-09-26 로그 참조.
@@ -13,11 +13,27 @@
 - 이번 Phase 0 보강: Worklet 첫 처리 응답과 15초 시작 제한, 초기화/종료 Promise 공유, 취소·오류 정리·재시작의 작업 번호 확인, 종료 실패 재시도 구현. 단위 11개와 production 오디오 E2E 4개를 작성했으며 미실행. 정적 검사와 빌드 결과는 아래 로그 참조.
 - 이번 Phase 1: Tap Tempo로 4분음표 입력 간격의 BPM 제안·설정 적용, 40~240 BPM 범위·최근 네 간격 평균·빠른 입력 제외·긴 중단 후 재시작·상태 초기화·기존 템포 잠금을 구현함. 단위 18개와 production E2E 시나리오 4개는 작성만 했으며 미실행. 정적 검사 결과는 아래 로그 참조.
 - 별도 구현: 1마디 카운트인은 `feature/phase-1-count-in` / `f7195e0`에 구현·푸시되어 있으며 develop에는 아직 통합하지 않음. 카운트인 단위 26개·E2E 2개도 미실행이며 해당 브랜치의 기록을 따름.
-- 다음 작업: 기본 키보드 연주 조작. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
+- 다음 작업: 사용자 피드백에 따른 여러 로컬 프로젝트 관리. 키보드·입력 채널·AUTO·음성 보정·재생 예약은 각 기능 브랜치에 구현·미통합이며 `plan/NEXT.md`의 브랜치 목록을 따른다. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 - 개발 기준: [Phase별 로드맵](plan/README.md)과 [다음 작업 계획](plan/NEXT.md). 이후 기능 선택과 작업 범위는 이 계획을 기준으로 진행한다.
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
+
+## 2026-09-27 — 내 프로젝트 페이지·보기 메뉴·마이크 연결 동선 수정
+
+- 요구사항: `UX-01`, `UX-02`, `UX-03`, `SYS-02`, `IN-01`의 부분 구현. 사용자가 Project/View의 앵커 이동과 찾기 어려운 마이크 연결을 지적하여 다음 오디오 기능보다 우선했다.
+- 원인: 상단 Project/Track/View는 각각 `#project`/`#tracks`/`#mixer` 링크였다. 실제 페이지/보기 메뉴가 없고 프로젝트·데모 버튼과 라이브러리 탭은 기능이 없었다.
+- 변경: `/projects` 페이지에 현재 로컬 프로젝트 1개의 실제 저장 상태·트랙 수·템포·저장 날짜/시간·작업 이어하기를 제공한다. 로딩/빈 상태/불러오기 실패/저장 실패/충돌/세션 전용 상태를 구분한다. 저장소 실패를 빈 목록으로 표시하지 않으며 재시도 경로를 연결한다.
+- View는 Radix 라디오 메뉴로 전체/트랙/믹서/입력·트랙 설정을 전환한다. 화면 패널은 CSS로 전환하며 오디오 컨트롤러 수명과 분리한다. 모바일 상단에서도 내 프로젝트·View·마이크 연결을 사용할 수 있다.
+- 상단 마이크 연결과 기존 입력 설정은 하나의 Dialog를 공유한다. 오디오 시작/재개/취소/종료 재시도와 기존 마이크 권한·장치 선택·입력 설정을 모으고 첫 녹음까지 안내한다. 사용자 동작 없이 마이크를 요청하거나 모니터링을 켜지 않는다.
+- 공통 RootLayout으로 AudioEngineProvider와 헤더를 이동하여 Next Link 페이지 왕복 시 프로젝트 PCM·저장 상태·오디오 연결을 유지한다. 정지/PANIC은 두 화면 모두 제공한다. 브라우저 새로고침은 기존 복구 경로와 수동 오디오 시작을 따른다.
+- 동작 없는 Edit, 라이브러리 탐색 탭과 아래쪽 프로젝트 자리표시자 영역을 제거한다. FX/배속은 사유와 함께 기존 비활성 상태를 유지한다.
+- 변경 파일: `src/app/{layout,page,globals.css}`, `src/app/projects/page.tsx`, `src/components/studio/{studio-shell,studio-view-provider,studio-navigation,studio-workspace,studio-input-panel,microphone-connection,my-projects}.tsx`, `src/audio/storage/loop-persistence.ts`(저장 시각 레이블에 날짜 추가), `tests/e2e/{home,local-save,tap-tempo,navigation}.spec.ts`, `docs/plan/NEXT.md`와 이 문서.
+- 작성한 회귀 시나리오: 내 프로젝트 직접 진입/새로고침/뒤로가기·빈 상태, 모바일 View/마이크 Dialog/포커스, 저장 접근 거부 시 오류 표시, 실제 합성 마이크 PCM 저장 후 페이지 왕복/새로고침 복구 4개. 기존 홈·저장·Tap UI 선택자를 변경된 메뉴 이름에 맞췄다. **모두 실행하지 않았다.**
+- 검증: 린트·타입 검사·production 빌드 성공. 빌드에 `/`와 `/projects` 정적 경로가 포함됨. React Doctor 변경 범위 100점 확인 후 전체 검사에서 새 파일의 복잡도·렌더 중 날짜 포맷·context 값 경고를 발견해 수정함. 최종 전체 검사 79개 파일 및 스테이징 후 변경 범위 72개 파일 모두 100/100점, 경고 0개. 마지막 일반 실행은 npm DNS 조회 실패(ENOTFOUND), 오프라인 대체는 캐시 없음(ENOTCACHED)으로 실패했으며 네트워크 권한으로 재실행하여 성공했다. `npm run lint`, `npm run typecheck`, `npm run build`, `git diff --check` 모두 exit 0.
+- 제한: 실제 브라우저 레이아웃·키보드·모바일·오디오·IndexedDB 왕복은 미검증. 사용자 중단 요청에 따라 `npm run test`, `test:audio`, `test:e2e`, 브라우저 자동 조작, 실청취를 실행하지 않았다. Phase 전체와 실제 동작의 검증 완료로 표시하지 않는다.
+- 저장 범위: 현재 자동 저장 프로젝트는 1개다. 여러 프로젝트 생성/이름 변경/복제/삭제, 파일 백업, 샘플 가져오기, 데모는 미구현이며 페이지에 명시한다. 저장 스키마/PCM/DSP/Worklet 프로토콜은 변경하지 않았다.
+- Git: 최신 develop에서 `fix/studio-navigation`을 생성했다. 기존 기능 브랜치와 stash/worktree는 보존했다. 특히 재생 예약 `9a53514`는 별도 브랜치에 있으며 이 브랜치에는 미통합이다. develop 병합은 별도 요청 범위다.
 
 ## 상태 규칙
 
