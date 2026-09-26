@@ -3,6 +3,7 @@ import { InputLevelMeter } from "../input/input-meter";
 import { PcmStation } from "../loop/pcm-station";
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { PPQ } from "../transport/timing";
+import { WORKLET_PROTOCOL_VERSION } from "../engine/worklet-protocol";
 
 declare const sampleRate: number;
 declare const currentFrame: number;
@@ -19,6 +20,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
   private readonly click = new ClickVoice(sampleRate);
   private readonly loop = new PcmStation(this.clock, sampleRate, this.port);
   private blockFrames = 0;
+  private readySent = false;
   private phase = 0;
   private level = 0;
   private enabled = false;
@@ -154,6 +156,11 @@ class TestToneProcessor extends AudioWorkletProcessor {
     if (this.metronomeDirty) {
       this.port.postMessage({ type: "metronome", enabled: this.metronomeEnabled });
       this.metronomeDirty = false;
+    }
+
+    if (!this.readySent && frameCount > 0) {
+      this.readySent = true;
+      this.port.postMessage({ type: "worklet-ready", version: WORKLET_PROTOCOL_VERSION, sampleRate, blockFrames: frameCount });
     }
 
     return true;

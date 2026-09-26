@@ -13,6 +13,7 @@ const phaseStatus: Record<AudioPhase, string> = {
   idle: ko.audioIdle, starting: ko.audioStarting, ready: ko.audioReady,
   playing: ko.audioPlaying, suspended: ko.audioSuspended, stopping: ko.audioStopping,
   error: ko.audioErrors.startFailed,
+  "close-error": ko.audioErrors.closeFailed,
 };
 
 function AudioPrimaryAction() {
@@ -24,13 +25,14 @@ function AudioPrimaryAction() {
     case "ready": return <Button onClick={audio.startTone}>{ko.toneStart}</Button>;
     case "playing": return <Button variant="soft" onClick={audio.stopTone}>{ko.toneStop}</Button>;
     case "suspended": return <Button onClick={() => void audio.resumeAudio()}>{ko.audioResume}</Button>;
+    case "close-error": return <Button onClick={() => void audio.stopAudio()}>{ko.audioCloseRetry}</Button>;
     default: return null;
   }
 }
 
 function AudioPowerActions() {
   const audio = useAudioSessionContext();
-  const canStop = audio.phase !== "idle" && audio.phase !== "error";
+  const canStop = audio.phase !== "idle" && audio.phase !== "error" && audio.phase !== "close-error";
   return <Flex gap="2" wrap="wrap" mt="4"><AudioPrimaryAction />{canStop && <Button variant="outline" color="gray" disabled={audio.phase === "stopping"} onClick={() => void audio.stopAudio()}>{audio.phase === "starting" ? ko.audioCancel : ko.audioEnd}</Button>}</Flex>;
 }
 

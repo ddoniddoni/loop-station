@@ -1,6 +1,7 @@
 import { isTransportSnapshot, type TransportConfig, type TransportSnapshot } from "../transport/audio-frame-clock";
 import type { MicrophoneController } from "../input/microphone-controller";
 import type { StationController } from "../loop/station-controller";
+import { AUDIO_STARTUP_TIMEOUT_MS, isWorkletReady } from "./worklet-protocol";
 
 type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
@@ -16,6 +17,9 @@ export type AudioSetupErrorCode =
   | "not-running"
   | "worklet-unavailable"
   | "worklet-load-failed"
+  | "worklet-protocol-mismatch"
+  | "startup-timeout"
+  | "processor-failed"
   | "disposed";
 
 export class AudioSetupError extends Error {
@@ -25,6 +29,18 @@ export class AudioSetupError extends Error {
   }
 }
 
+/** Main-thread failure detection only; never used as a transport or loop clock. */
+function startupDeadline(work: Promise<void>, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => { clearTimeout(timer); signal.removeEventListener("abort", cancelled); };
+    const cancelled = () => { cleanup(); reject(new AudioSetupError("disposed")); };
+    const timer = setTimeout(() => { cleanup(); reject(new AudioSetupError("startup-timeout")); }, AUDIO_STARTUP_TIMEOUT_MS);
+    signal.addEventListener("abort", cancelled, { once: true });
+    work.then(() => { cleanup(); resolve(); }, (error: unknown) => { cleanup(); reject(error); });
+    if (signal.aborted) cancelled();
+  });
+}
+
 export class TestToneEngine {
   private readonly context: AudioContext;
   private node: AudioWorkletNode | null = null;
@@ -32,6 +48,11 @@ export class TestToneEngine {
   private clickGain: GainNode | null = null;
   private loopGain: GainNode | null = null;
   private disposed = false;
+  private ready = false;
+  private initialization: Promise<void> | null = null;
+  private disposal: Promise<void> | null = null;
+  private readonly startupAbort = new AbortController();
+  private readyWaiter: { resolve(): void; reject(error: AudioSetupError): void } | null = null;
 
   private readonly handleContextStateChange = () => {
     if (this.disposed) return;
@@ -60,10 +81,24 @@ export class TestToneEngine {
   }
 
   get isReady(): boolean {
-    return this.node !== null;
+    return this.ready && !this.disposed;
   }
 
-  async initialize(): Promise<void> {
+  initialize(): Promise<void> {
+    if (this.disposed) return Promise.reject(new AudioSetupError("disposed"));
+    this.initialization ??= this.initializeOnce();
+    return this.initialization;
+  }
+
+  private async initializeOnce(): Promise<void> {
+    try { await startupDeadline(this.prepareGraph(), this.startupAbort.signal); }
+    catch (error) {
+      await this.dispose();
+      throw error;
+    }
+  }
+
+  private async prepareGraph(): Promise<void> {
     await this.context.resume();
     this.assertActive();
     if (this.context.state !== "running") {
@@ -87,9 +122,15 @@ export class TestToneEngine {
       channelCount: 1,
       channelCountMode: "explicit",
     });
+    this.node = node;
     node.port.onmessage = (event: MessageEvent<unknown>) => {
       if (this.disposed) return;
       const data = event.data;
+      if (typeof data === "object" && data !== null && "type" in data && data.type === "worklet-ready") {
+        if (isWorkletReady(data, this.sampleRate)) this.readyWaiter?.resolve();
+        else this.readyWaiter?.reject(new AudioSetupError("worklet-protocol-mismatch"));
+        return;
+      }
       this.input.acceptMeter(data);
       this.loop.accept(data);
       if (isTransportSnapshot(data)) {
@@ -105,6 +146,11 @@ export class TestToneEngine {
       }
     };
     node.onprocessorerror = () => {
+      if (this.disposed) return;
+      if (!this.ready) {
+        this.readyWaiter?.reject(new AudioSetupError("processor-failed"));
+        return;
+      }
       this.input.setAudioRunning(false);
       this.callbacks.onProcessorError();
     };
@@ -113,7 +159,6 @@ export class TestToneEngine {
     toneGain.gain.value = 0.15;
     const clickGain = this.context.createGain();
     clickGain.gain.value = 0.15;
-    this.node = node;
     this.toneGain = toneGain;
     this.clickGain = clickGain;
     this.loopGain = this.context.createGain();
@@ -124,14 +169,21 @@ export class TestToneEngine {
     node.connect(clickGain, 1);
     toneGain.connect(this.context.destination);
     clickGain.connect(this.context.destination);
+    // Connecting a node is not evidence that its process() has rendered a block.
+    await new Promise<void>((resolve, reject) => { this.readyWaiter = { resolve, reject }; });
+    this.readyWaiter = null;
+    this.assertActive();
+    if (this.context.state !== "running") throw new AudioSetupError("not-running");
     this.input.attachAudio(this.context, node);
     this.loop.attach(this.context, node);
     this.context.addEventListener("statechange", this.handleContextStateChange);
+    this.ready = true;
   }
 
   async resume(): Promise<void> {
     this.assertActive();
-    await this.context.resume();
+    if (!this.ready) throw new AudioSetupError("not-running");
+    await startupDeadline(this.context.resume(), this.startupAbort.signal);
     this.assertActive();
     if (this.context.state !== "running") {
       throw new AudioSetupError("not-running");
@@ -143,7 +195,7 @@ export class TestToneEngine {
 
   startTone(): void {
     this.assertActive();
-    if (this.context.state !== "running" || !this.node) return;
+    if (!this.isReady || this.context.state !== "running" || !this.node) return;
     this.node.port.postMessage({ type: "start" });
   }
 
@@ -153,29 +205,29 @@ export class TestToneEngine {
   }
 
   startTransport(): void {
-    if (this.disposed || this.context.state !== "running") return;
+    if (!this.isReady || this.context.state !== "running") return;
     this.node?.port.postMessage({ type: "transport-start" });
   }
 
   stopTransport(): void {
-    if (this.disposed || this.context.state !== "running") return;
+    if (!this.isReady || this.context.state !== "running") return;
     this.loop.stop();
     this.node?.port.postMessage({ type: "transport-stop" });
   }
 
   resetTransport(): void {
-    if (this.disposed || this.context.state !== "running") return;
+    if (!this.isReady || this.context.state !== "running") return;
     this.loop.stop();
     this.node?.port.postMessage({ type: "transport-reset" });
   }
 
   configureTransport(config: TransportConfig): void {
-    if (this.disposed || this.context.state !== "running" || this.loop.locked) return;
+    if (!this.isReady || this.context.state !== "running" || this.loop.locked) return;
     this.node?.port.postMessage({ type: "transport-configure", config });
   }
 
   setMetronomeEnabled(enabled: boolean): void {
-    if (this.disposed || this.context.state !== "running") return;
+    if (!this.isReady || this.context.state !== "running") return;
     this.node?.port.postMessage({ type: "metronome-enable", enabled });
   }
 
@@ -184,9 +236,27 @@ export class TestToneEngine {
     this.clickGain.gain.setTargetAtTime(volume * 0.003, this.context.currentTime, 0.005);
   }
 
-  async dispose(): Promise<void> {
-    if (this.disposed) return;
+  dispose(): Promise<void> {
+    if (this.disposal) return this.disposal;
+    // Keep one close promise until the browser has actually released the context.
+    this.disposal = this.closeContext().catch((error: unknown) => {
+      this.disposal = null;
+      throw error;
+    });
+    return this.disposal;
+  }
+
+  private async closeContext(): Promise<void> {
+    try { if (!this.disposed) this.releaseGraph(); }
+    finally { if (this.context.state !== "closed") await this.context.close(); }
+  }
+
+  private releaseGraph(): void {
     this.disposed = true;
+    this.ready = false;
+    this.startupAbort.abort();
+    this.readyWaiter?.reject(new AudioSetupError("disposed"));
+    this.readyWaiter = null;
     this.context.removeEventListener("statechange", this.handleContextStateChange);
     this.loop.detach();
     this.input.detachAudio();
@@ -204,7 +274,6 @@ export class TestToneEngine {
     this.toneGain = null;
     this.clickGain = null;
     this.loopGain = null;
-    if (this.context.state !== "closed") await this.context.close();
   }
 
   private assertActive(): void {
