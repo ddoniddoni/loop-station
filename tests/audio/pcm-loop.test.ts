@@ -2,22 +2,22 @@ import { describe, expect, it } from "vitest";
 import { AudioFrameClock, type TransportConfig } from "../../src/audio/transport/audio-frame-clock";
 import { ticksPerBar } from "../../src/audio/transport/timing";
 import { PcmLoop } from "../../src/audio/loop/pcm-loop";
-import { isLoopMetadata, isLoopStatus, recordingCapacity } from "../../src/audio/loop/loop-protocol";
+import { isLoopMetadata, isLoopStatus, RECORD_LENGTHS, recordingCapacity } from "../../src/audio/loop/loop-protocol";
 
 const standard: TransportConfig = { bpm: 120, numerator: 4, denominator: 4 };
 
-function fixture(rate = 48000, config = standard) {
+function fixture(rate = 48000, config = standard, bars = 4) {
   const messages: unknown[] = [];
   const clock = new AudioFrameClock(rate);
   clock.configure(config);
   const loop = new PcmLoop(clock, rate, {
     postMessage(message, transfer = []) { messages.push(structuredClone(message, { transfer })); },
   });
-  const frames = recordingCapacity(rate, config);
-  const command = { type: "loop-record", sequence: 1, config, pcm: new ArrayBuffer(frames * 4), archive: new ArrayBuffer(frames * 4) };
+  const frames = recordingCapacity(rate, config, bars);
+  const command = { type: "loop-record", sequence: 1, config, bars, pcm: new ArrayBuffer(frames * 4), archive: new ArrayBuffer(frames * 4) };
   const bar = ticksPerBar(config.numerator, config.denominator);
   const start = clock.frameAtTick(bar);
-  const end = clock.frameAtTick(bar * 5);
+  const end = clock.frameAtTick(bar * (1 + bars));
   function render(until: number, input: (frame: number) => number | undefined = () => 0.25) {
     const sizes = [64, 192, 127, 256];
     let block = 0;
@@ -44,6 +44,33 @@ function fixture(rate = 48000, config = standard) {
 }
 
 describe("one-track PCM capture and audio-frame looping", () => {
+  it.each(RECORD_LENGTHS)("records %i bars in 7/8 and starts playback at the very next frame", (bars) => {
+    const f = fixture(44100, { bpm: 127, numerator: 7, denominator: 8 }, bars);
+    f.loop.handle(f.command, 127, true);
+    f.render(f.end, (frame) => frame === f.start ? 0.75 : frame === f.end - 1 ? -0.5 : 0);
+    const take = f.captured();
+    expect(take.metadata).toMatchObject({ ticks: ticksPerBar(7, 8) * bars, frames: f.end - f.start, complete: true });
+    expect(take.pcm.byteLength).toBe(f.command.pcm.byteLength);
+    expect(new Float32Array(take.pcm)[take.metadata.frames - 1]).toBe(-0.5);
+    expect(f.render(f.end + 1)).toBe(0.75);
+  });
+
+  it("rejects invalid lengths and mismatched capacities without starting the clock", () => {
+    for (const bars of [0, 3, 16, 1.5, NaN, Infinity, "2", null]) {
+      const f = fixture();
+      expect(() => f.loop.handle({ ...f.command, bars }, 64, true)).not.toThrow();
+      f.loop.publish();
+      expect(f.loop.locked).toBe(false);
+      expect(f.clock.playing).toBe(false);
+      expect(f.messages.filter(isLoopStatus).at(-1)?.issue).toBeTruthy();
+    }
+    const f = fixture();
+    f.loop.handle({ ...f.command, bars: 8 }, 64, true);
+    expect(f.loop.locked).toBe(false);
+    expect(f.clock.playing).toBe(false);
+    expect(() => recordingCapacity(48000, standard, 3)).toThrow("invalid-recording-length");
+  });
+
   it.each([44100, 48000])("captures the exact four-bar interval at %i Hz with variable blocks", (rate) => {
     const f = fixture(rate);
     f.loop.handle(f.command, 192, true);

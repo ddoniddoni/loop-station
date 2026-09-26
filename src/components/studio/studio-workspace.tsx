@@ -54,7 +54,7 @@ function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: Trac
 function InspectorPanel({ selected }: { selected: TrackSlot }) {
   return (
     <aside id="settings" tabIndex={-1} className="station-inspector" aria-labelledby="inspector-title" data-tone={selected.tone}>
-      <div className="station-inspector-head"><Text as="p" className="station-overline">FOCUSED TRACK</Text><Heading as="h2" id="inspector-title" size="4">Track {selected.number} – {selected.name}</Heading><Badge variant="outline" color="gray">4 BARS</Badge></div>
+      <div className="station-inspector-head"><Text as="p" className="station-overline">FOCUSED TRACK</Text><Heading as="h2" id="inspector-title" size="4">Track {selected.number} – {selected.name}</Heading><Badge variant="outline" color="gray">MONO</Badge></div>
       <section className="station-inspector-section station-clip-settings" aria-labelledby="clip-settings-title">
         <Heading as="h3" id="clip-settings-title" size="2">CLIP SETTINGS</Heading>
         <RecordedClipDetails trackId={Number(selected.number) - 1} />

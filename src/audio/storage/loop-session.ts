@@ -1,6 +1,5 @@
 import type { CachedLoop, LoopHistoryState } from "../loop/loop-history";
-import { isLoopMetadata, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity } from "../loop/loop-protocol";
-import { ticksPerBar } from "../transport/timing";
+import { isLoopMetadata, isRecordBars, loopBars, LOOP_MEMORY_BYTES, recordingCapacity } from "../loop/loop-protocol";
 
 export type SavedLoopSession = {
   schemaVersion: 1;
@@ -27,10 +26,11 @@ function validTake(value: unknown): value is CachedLoop | null {
   if (value === null) return true;
   if (!object(value) || !isLoopMetadata(value.metadata) || !(value.pcm instanceof ArrayBuffer)) return false;
   const meta = value.metadata;
-  const capacity = recordingCapacity(meta.sampleRate, meta);
+  const bars = loopBars(meta);
+  if (!isRecordBars(bars)) return false;
+  const capacity = recordingCapacity(meta.sampleRate, meta, bars);
   const expectedFrames = capacity - 1;
-  return meta.ticks === ticksPerBar(meta.numerator, meta.denominator) * RECORD_BARS
-    && value.pcm.byteLength === capacity * 4 && meta.frames <= capacity
+  return value.pcm.byteLength === capacity * 4 && meta.frames <= capacity
     && (!meta.complete || Math.abs(meta.frames - expectedFrames) <= 1);
 }
 function validRevisions(value: Record<string, unknown>): boolean {
@@ -39,7 +39,7 @@ function validRevisions(value: Record<string, unknown>): boolean {
   const current = value.current.metadata;
   return [value.undo, value.redo].every((take) => take === null || (take.metadata.complete
     && take.metadata.bpm === current.bpm && take.metadata.numerator === current.numerator
-    && take.metadata.denominator === current.denominator && take.metadata.sampleRate === current.sampleRate));
+    && take.metadata.denominator === current.denominator && take.metadata.sampleRate === current.sampleRate && take.metadata.ticks === current.ticks));
 }
 export function sessionTakes(history: LoopHistoryState): (CachedLoop | null)[] {
   return [history.current, history.undo, history.redo,

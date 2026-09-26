@@ -32,6 +32,19 @@ function fixture(repository: SessionRepository<StationProject> | null = null, ra
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("project-wide coordination", () => {
+  it("keeps recording lengths independent and locks other selectors during capture", async () => {
+    const f = fixture();
+    f.station.tracks[0].setRecordBars(1);
+    f.station.tracks[1].setRecordBars(8);
+    expect(f.station.tracks.map((track) => track.getSnapshot().recordBars)).toEqual([1, 8, 4, 4, 4, 4, 4, 4]);
+    await f.station.tracks[0].record();
+    f.station.tracks[1].setRecordBars(2);
+    expect(f.station.tracks[1].getSnapshot().recordBars).toBe(8);
+    f.station.tracks[0].cancel();
+    f.station.tracks[1].setRecordBars(2);
+    expect(f.station.tracks[1].getSnapshot().recordBars).toBe(2);
+  });
+
   it("locks other captures, isolates a foreign acknowledgement, then releases the next track", async () => {
     const f = fixture();
     await f.station.tracks[0].record();

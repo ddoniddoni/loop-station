@@ -2,6 +2,8 @@ import { isTransportConfig, type TransportConfig } from "../transport/audio-fram
 import { PPQ, ticksPerBar } from "../transport/timing";
 
 export const RECORD_BARS = 4;
+export const RECORD_LENGTHS = [1, 2, 4, 8] as const;
+export type RecordBars = typeof RECORD_LENGTHS[number];
 export const MAX_RECORD_SECONDS = 60;
 export const LOOP_MEMORY_BYTES = 32 * 1024 * 1024;
 export type CaptureMode = "record" | "overdub";
@@ -19,9 +21,18 @@ export type LoopStatus = {
   issue: string | null;
 };
 
-export function recordingCapacity(sampleRate: number, config: TransportConfig): number {
+export function isRecordBars(value: unknown): value is RecordBars {
+  return value === 1 || value === 2 || value === 4 || value === 8;
+}
+
+export function loopBars(metadata: LoopMetadata): number {
+  return metadata.ticks / ticksPerBar(metadata.numerator, metadata.denominator);
+}
+
+export function recordingCapacity(sampleRate: number, config: TransportConfig, bars: number = RECORD_BARS): number {
   if (!isTransportConfig(config)) throw new RangeError("invalid-recording-tempo");
-  const seconds = ticksPerBar(config.numerator, config.denominator) * RECORD_BARS / PPQ * 60 / config.bpm;
+  if (!isRecordBars(bars)) throw new RangeError("invalid-recording-length");
+  const seconds = ticksPerBar(config.numerator, config.denominator) * bars / PPQ * 60 / config.bpm;
   if (!Number.isFinite(sampleRate) || sampleRate <= 0 || seconds > MAX_RECORD_SECONDS) throw new RangeError("recording-limit");
   return Math.ceil(seconds * sampleRate) + 1;
 }

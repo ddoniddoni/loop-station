@@ -1,7 +1,7 @@
 import { AudioFrameClock, isTransportConfig } from "../transport/audio-frame-clock";
 import { ticksPerBar } from "../transport/timing";
 import { sameTempo } from "./station-protocol";
-import { isLoopMetadata, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type LoopMetadata, type LoopPhase } from "./loop-protocol";
+import { isLoopMetadata, isRecordBars, loopBars, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type LoopMetadata, type LoopPhase } from "./loop-protocol";
 
 type OverdubPass = {
   pcm: Float32Array<ArrayBuffer>; archive: Float32Array<ArrayBuffer>;
@@ -68,6 +68,8 @@ export class PcmLoop {
   }
 
   private prepare(value: object, blockFrames: number, inputActive: boolean): void {
+    const bars = "bars" in value ? value.bars : RECORD_BARS;
+    if (!isRecordBars(bars)) { this.issue = "녹음 길이는 1·2·4·8마디 중에서 선택하세요."; return; }
     if (this.locked || this.revision || blockFrames <= 0 || !inputActive || !("config" in value) || !isTransportConfig(value.config)
       || !("pcm" in value) || !(value.pcm instanceof ArrayBuffer) || !("archive" in value) || !(value.archive instanceof ArrayBuffer)) {
       this.issue = "녹음을 시작할 수 없습니다. 오디오와 마이크 연결을 확인하세요.";
@@ -75,7 +77,7 @@ export class PcmLoop {
     }
     const config = value.config;
     const current = this.clock.meter;
-    const bytes = recordingCapacity(this.rate, config) * 4;
+    const bytes = recordingCapacity(this.rate, config, bars) * 4;
     if (config.bpm !== current.bpm || config.numerator !== current.numerator || config.denominator !== current.denominator
       || value.pcm.byteLength !== bytes || value.archive.byteLength !== bytes || value.pcm === value.archive || bytes * 2 > LOOP_MEMORY_BYTES) {
       this.issue = "녹음 준비 중 박자 설정이 바뀌었거나 버퍼가 부족합니다. 다시 시도하세요.";
@@ -85,7 +87,7 @@ export class PcmLoop {
     this.captureSequence = this.sequence;
     this.startTick = this.nextBar(blockFrames);
     this.startFrame = this.clock.frameAtTick(this.startTick);
-    const ticks = ticksPerBar(config.numerator, config.denominator) * RECORD_BARS;
+    const ticks = ticksPerBar(config.numerator, config.denominator) * bars;
     const frames = this.clock.frameAtTick(this.startTick + ticks) - this.startFrame;
     this.metadata = { ...config, sampleRate: this.rate, frames, ticks, complete: false };
     this.pcm = new Float32Array(value.pcm);
@@ -227,7 +229,9 @@ export class PcmLoop {
       this.issue = "반복 재생과 마이크 연결을 확인한 뒤 오버더빙을 시작하세요.";
       return;
     }
-    const bytes = recordingCapacity(this.rate, this.metadata) * 4;
+    const bars = loopBars(this.metadata);
+    if (!isRecordBars(bars)) { this.issue = "이 루프 길이의 오버더빙은 아직 지원하지 않습니다."; return; }
+    const bytes = recordingCapacity(this.rate, this.metadata, bars) * 4;
     if (value.pcm.byteLength !== bytes || value.archive.byteLength !== bytes || value.pcm === value.archive
       || bytes * 2 + (this.pcm?.byteLength ?? 0) > LOOP_MEMORY_BYTES) {
       this.issue = "오버더빙 버퍼가 부족합니다. 기존 루프는 유지됩니다.";

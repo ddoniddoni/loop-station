@@ -6,7 +6,7 @@ import { ko } from "../../src/lib/i18n/ko";
 test.use({ permissions: ["microphone"], launchOptions: { args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] } });
 test.setTimeout(60_000);
 
-async function recordLoop(page: Page) {
+async function recordLoop(page: Page, bars = 4) {
   await page.goto("/");
   await expect(page.getByRole("button", { name: /로컬 저장 상태: 녹음 후 자동 저장/ })).toBeVisible();
   await page.getByRole("button", { name: "오디오 연결 설정" }).click();
@@ -21,7 +21,12 @@ async function recordLoop(page: Page) {
   await page.getByRole("button", { name: "입력 설정 닫기" }).click();
   const loops = page.getByRole("button", { name: "Loops", exact: true });
   if (await loops.isVisible()) await loops.click();
-  await page.locator('[data-track="01"]').getByRole("button", { name: /RECORD 4 BARS/ }).click();
+  const track = page.locator('[data-track="01"]');
+  if (bars !== 4) {
+    await track.getByRole("combobox", { name: "1번 트랙 녹음 길이" }).click();
+    await page.getByRole("option", { name: `${bars}마디`, exact: true }).click();
+  }
+  await track.getByRole("button", { name: new RegExp(`RECORD ${bars} BAR`) }).click();
   await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible({ timeout: 20_000 });
 }
 
@@ -52,6 +57,45 @@ test("recorded PCM restores after reload without automatically starting audio", 
   await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "반복 재생", exact: true })).toBeDisabled();
   expect(await storedFingerprint(page)).toEqual(before);
+});
+
+test("different recording lengths survive overdub, clear recovery and reload", async ({ page }) => {
+  await recordLoop(page, 1);
+  const first = page.locator('[data-track="01"]');
+  const second = page.locator('[data-track="02"]');
+  const length = first.getByRole("combobox", { name: "1번 트랙 녹음 길이" });
+  await expect(length).toBeDisabled();
+  const original = await storedFingerprint(page);
+  expect(original.metadata.ticks).toBe(3840);
+  expect(original.metadata.frames).toBe(original.metadata.sampleRate * 2);
+  await second.getByRole("combobox", { name: "2번 트랙 녹음 길이" }).click();
+  await page.getByRole("option", { name: "8마디", exact: true }).click();
+  await second.getByRole("button", { name: /RECORD 8 BARS/ }).click();
+  await expect(page.getByRole("combobox", { name: "3번 트랙 녹음 길이" })).toBeDisabled();
+  await expect(first.getByRole("button", { name: "반복 정지", exact: true })).toBeEnabled();
+  await expect(second.locator(".station-track-state")).toHaveText("PLAYING", { timeout: 22_000 });
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  expect((await storedFingerprint(page, 1)).metadata.ticks).toBe(8 * 3840);
+  await first.getByRole("button", { name: "오버더빙 · 1회", exact: true }).click();
+  await expect(first.locator(".station-track-state")).toHaveText("OVERDUB", { timeout: 6000 });
+  await expect(first.locator(".station-track-state")).toHaveText("PLAYING", { timeout: 6000 });
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  const mixed = await storedFingerprint(page);
+  expect(mixed.metadata).toEqual(original.metadata);
+  await first.getByRole("button", { name: "비우기", exact: true }).click();
+  await expect(length).toBeEnabled();
+  await length.click();
+  await page.getByRole("option", { name: "2마디", exact: true }).click();
+  await expect(first.getByRole("button", { name: /RECORD 2 BARS/ })).toBeEnabled();
+  await first.getByRole("button", { name: "1번 트랙 비운 루프 복구", exact: true }).click();
+  await expect(length).toHaveText("1마디");
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  expect((await storedFingerprint(page)).hash).toEqual(mixed.hash);
+  await page.reload();
+  await expect(length).toHaveText("1마디");
+  await expect(second.getByRole("combobox", { name: "2번 트랙 녹음 길이" })).toHaveText("8마디");
+  await expect(first.getByRole("button", { name: "반복 재생", exact: true })).toBeDisabled();
+  expect((await storedFingerprint(page)).hash).toEqual(mixed.hash);
 });
 
 test("failure after the PCM write rolls back the whole transaction and preserves the previous saved loop", async ({ page }) => {
