@@ -1,3 +1,5 @@
+import type { InputChannel } from "./input-channel";
+
 function ramp(param: AudioParam, value: number, time: number): void {
   const current = param.value;
   param.cancelScheduledValues(time);
@@ -10,12 +12,14 @@ export class MicrophoneInputBus {
   private source: MediaStreamAudioSourceNode | null = null;
   private readonly inputGain: GainNode;
   private readonly monitorGain: GainNode;
+  private readonly splitter: ChannelSplitterNode;
 
   constructor(private readonly context: AudioContext, private readonly node: AudioWorkletNode) {
     this.inputGain = context.createGain();
     this.inputGain.channelCount = 1;
     this.inputGain.channelCountMode = "explicit";
     this.inputGain.channelInterpretation = "speakers";
+    this.splitter = context.createChannelSplitter(2);
     this.monitorGain = context.createGain();
     this.monitorGain.gain.value = 0;
     this.inputGain.connect(node);
@@ -24,6 +28,7 @@ export class MicrophoneInputBus {
   }
 
   connect(stream: MediaStream): void {
+    this.disconnectInput();
     const source = this.context.createMediaStreamSource(stream);
     try {
       source.connect(this.inputGain);
@@ -31,14 +36,33 @@ export class MicrophoneInputBus {
       source.disconnect();
       throw error;
     }
-    this.disconnectInput();
     this.source = source;
+  }
+
+  setChannel(channel: InputChannel): void {
+    if (!this.source) throw new Error("No microphone input to route");
+    this.setMonitor(0, true);
+    this.source.disconnect();
+    this.splitter.disconnect();
+    try {
+      if (channel === "mono") {
+        this.source.connect(this.inputGain);
+      } else {
+        // The splitter uses discrete channels, so CH1/CH2 are never downmixed.
+        this.source.connect(this.splitter);
+        this.splitter.connect(this.inputGain, channel === "left" ? 0 : 1);
+      }
+    } catch (error) {
+      this.disconnectInput();
+      throw error;
+    }
   }
 
   disconnectInput(): void {
     this.setMonitor(0, true);
     this.source?.disconnect();
     this.source = null;
+    this.splitter.disconnect();
   }
 
   setGain(db: number): void {

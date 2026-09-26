@@ -1,4 +1,5 @@
 import { isInputMeterSnapshot, type InputMeterSnapshot } from "./input-meter";
+import { isInputChannelAvailable, type InputChannel } from "./input-channel";
 import { MicrophoneInputBus } from "./microphone-input-bus";
 import { MicrophoneError, MicrophoneSession, type MicrophoneDevice, type MicrophoneErrorCode, type MicrophoneInfo } from "./microphone-session";
 
@@ -12,6 +13,7 @@ export type MicrophoneSnapshot = {
   listUnavailable: boolean;
   audioReady: boolean;
   routed: boolean;
+  channel: InputChannel;
   gainDb: number;
   monitorEnabled: boolean;
   monitorVolume: number;
@@ -21,7 +23,7 @@ export type MicrophoneSnapshot = {
 
 const initialSnapshot: MicrophoneSnapshot = {
   phase: "idle", info: null, devices: [], issue: null, listUnavailable: false,
-  audioReady: false, routed: false, gainDb: 0, monitorEnabled: false, monitorVolume: 20, meter: null, captureLocked: false,
+  audioReady: false, routed: false, channel: "mono", gainDb: 0, monitorEnabled: false, monitorVolume: 20, meter: null, captureLocked: false,
 };
 
 // Browser objects stay here; React subscribes only to the lightweight snapshot.
@@ -109,7 +111,22 @@ export class MicrophoneController {
   }
 
   retryRouting(): void {
+    if (this.snapshot.captureLocked || !this.snapshot.audioReady || this.snapshot.phase !== "active") return;
     this.routeInput();
+  }
+
+  setChannel(channel: InputChannel): void {
+    if (this.snapshot.captureLocked || !this.canControl() || !this.bus || channel === this.snapshot.channel
+      || !isInputChannelAvailable(channel, this.snapshot.info?.settings.channelCount)) return;
+    this.disableMonitor();
+    try {
+      this.bus.setChannel(channel);
+      this.update({ channel, meter: null });
+    } catch {
+      this.bus.disconnectInput();
+      this.update({ channel: "mono", routed: false, meter: null, issue: "routing-failed" });
+    }
+    this.resetMeter();
   }
 
   setGain(db: number): void {
@@ -165,7 +182,7 @@ export class MicrophoneController {
   private routeInput(): void {
     this.disableMonitor();
     this.bus?.disconnectInput();
-    this.update({ routed: false, meter: null });
+    this.update({ routed: false, channel: "mono", meter: null });
     const stream = this.session?.activeStream;
     if (stream && this.bus) {
       try {

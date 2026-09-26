@@ -4,6 +4,7 @@ import { Badge, Button, Slider, Switch, Text } from "@radix-ui/themes";
 import type { MicrophoneController, MicrophoneSnapshot } from "@/audio/input/microphone-controller";
 import type { InputMeterSnapshot } from "@/audio/input/input-meter";
 import { ko } from "@/lib/i18n/ko";
+import { MicrophoneChannelSelect } from "./microphone-channel-select";
 
 function decibels(amplitude: number): number {
   return amplitude > 0 ? 20 * Math.log10(amplitude) : -Infinity;
@@ -43,6 +44,23 @@ function InputMeter({ meter, enabled, onClearClip }: { meter: InputMeterSnapshot
   );
 }
 
+function InputConnectionStatus({ controller, snapshot, ready }: {
+  controller: MicrophoneController;
+  snapshot: MicrophoneSnapshot;
+  ready: boolean;
+}) {
+  return (
+    <>
+      {!ready && <Text as="p" id="input-controls-reason" size="2" color="gray">{
+        !snapshot.audioReady ? ko.inputNeedsAudio : snapshot.issue === "routing-failed" ? ko.inputRoutingHint : snapshot.phase === "switching" ? ko.microphoneSwitching : ko.inputNeedsMicrophone
+      }</Text>}
+      {snapshot.issue === "routing-failed" && snapshot.audioReady && (
+        <Button type="button" variant="outline" disabled={snapshot.captureLocked || snapshot.phase !== "active"} onClick={() => controller.retryRouting()}>{ko.inputRetryRouting}</Button>
+      )}
+    </>
+  );
+}
+
 export function MicrophoneInputControls({ controller, snapshot }: {
   controller: MicrophoneController;
   snapshot: MicrophoneSnapshot;
@@ -52,12 +70,8 @@ export function MicrophoneInputControls({ controller, snapshot }: {
 
   return (
     <div className="station-input-controls">
-      {!ready && <Text as="p" id="input-controls-reason" size="2" color="gray">{
-        !snapshot.audioReady ? ko.inputNeedsAudio : snapshot.issue === "routing-failed" ? ko.inputRoutingHint : snapshot.phase === "switching" ? ko.microphoneSwitching : ko.inputNeedsMicrophone
-      }</Text>}
-      {snapshot.issue === "routing-failed" && snapshot.audioReady && (
-        <Button type="button" variant="outline" onClick={() => controller.retryRouting()}>{ko.inputRetryRouting}</Button>
-      )}
+      <InputConnectionStatus controller={controller} snapshot={snapshot} ready={ready} />
+      <MicrophoneChannelSelect controller={controller} snapshot={snapshot} ready={ready} />
       <InputMeter meter={snapshot.audioReady && snapshot.routed ? snapshot.meter : null} enabled={ready} onClearClip={() => controller.clearClip()} />
       <div className="station-input-gain">
         <div className="station-input-heading">

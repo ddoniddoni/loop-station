@@ -91,7 +91,7 @@
 
 ## 앞으로의 개발 방식
 
-Phase 0 오디오 수명 보강과 Phase 1 Tap Tempo, 1/2/4/8마디 녹음 길이·v5 저장을 develop에 통합했다. 실제 검증은 보류 상태이며 다음 작은 기능은 **기본 키보드 연주 조작**이다. 1마디 카운트인은 별도 `feature/phase-1-count-in` 브랜치에 구현·푸시되어 있고 아직 develop에 통합하지 않았다. 구체적 현재 범위와 브랜치별 상태는 `NEXT.md`를 따른다.
+Phase 0 오디오 수명 보강과 Phase 1 Tap Tempo, 1/2/4/8마디 녹음 길이·v5 저장을 develop에 통합했다. 입력 채널 선택은 `feature/phase-1-input-channels`에 구현했고 다음 작은 기능은 **AUTO 모니터링**이다. 실제 검증은 보류 상태다. 키보드 연주와 1마디 카운트인은 각각 별도 `feature/phase-2-keyboard-controls`, `feature/phase-1-count-in` 브랜치에 구현·푸시되어 있고 아직 develop에 통합하지 않았다. 구체적 현재 범위와 브랜치별 상태는 `NEXT.md`를 따른다.
 
 1. `AGENTS.md`, 이 문서, `NEXT.md`, `PROGRESS.md`를 읽고 현재 작업 트리와 관련 명세를 확인한다.
 2. 사용자가 “다음 기능”을 요청하면 `NEXT.md`의 현재 작업을 선택한다. Phase 개발 시작 전에 최신 원격 develop을 확인하고 `feature/phase-<번호>-<작업>` 등 작업 브랜치를 만든다. 같은 작업 브랜치에서 구현 중인 항목은 이어서 처리하고, 기능 범위·요구사항 ID·검증 항목을 짧게 정리한다.
