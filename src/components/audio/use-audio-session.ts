@@ -7,7 +7,7 @@ import type { StationController } from "@/audio/loop/station-controller";
 import type { TransportConfig, TransportSnapshot } from "@/audio/transport/audio-frame-clock";
 import { ko } from "@/lib/i18n/ko";
 
-export type AudioPhase = "idle" | "starting" | "ready" | "playing" | "suspended" | "stopping" | "error";
+export type AudioPhase = "idle" | "starting" | "ready" | "playing" | "suspended" | "stopping" | "close-error" | "error";
 
 function release(engine: TestToneEngine): void {
   void engine.dispose().catch(() => undefined);
@@ -19,6 +19,8 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export function useAudioSession(input: MicrophoneController, loop: StationController) {
   const engineRef = useRef<TestToneEngine | null>(null);
+  const closingRef = useRef<TestToneEngine | null>(null);
+  const operationRef = useRef(0);
   const [phase, setPhase] = useState<AudioPhase>("idle");
   const [sampleRate, setSampleRate] = useState<number | null>(null);
   const [transport, setTransport] = useState<TransportSnapshot | null>(null);
@@ -27,6 +29,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
   const [issue, setIssue] = useState<string | null>(null);
 
   useEffect(() => () => {
+    operationRef.current += 1;
     const engine = engineRef.current;
     engineRef.current = null;
     if (engine) release(engine);
@@ -41,8 +44,33 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
   }, [loop]);
 
+  async function closeAudio(engine: TestToneEngine, failure: string | null = null): Promise<void> {
+    if (engineRef.current !== engine || closingRef.current === engine) return;
+    const operation = ++operationRef.current;
+    closingRef.current = engine;
+    setPhase("stopping");
+    setTransport(null);
+    setMetronomeEnabled(null);
+    setSampleRate(null);
+    try {
+      await engine.dispose();
+      if (engineRef.current !== engine || operation !== operationRef.current) return;
+      engineRef.current = null;
+      setPhase(failure ? "error" : "idle");
+      setIssue(failure);
+    } catch {
+      if (engineRef.current !== engine || operation !== operationRef.current) return;
+      // A failed close still owns the context. Retry teardown before allowing a new one.
+      setPhase("close-error");
+      setIssue(ko.audioErrors.closeFailed);
+    } finally {
+      if (closingRef.current === engine) closingRef.current = null;
+    }
+  }
+
   async function startAudio(): Promise<void> {
-    if (engineRef.current) return;
+    if (engineRef.current || closingRef.current) return;
+    const operation = ++operationRef.current;
     setIssue(null);
     setPhase("starting");
     setTransport(null);
@@ -57,13 +85,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
           if (state === "running") {
             setPhase((current) => engine.isReady ? (current === "playing" ? current : "ready") : "starting");
           } else if (state === "closed") {
-            engineRef.current = null;
-            release(engine);
-            setSampleRate(null);
-            setTransport(null);
-            setMetronomeEnabled(null);
-            setPhase("error");
-            setIssue(ko.audioErrors.closed);
+            void closeAudio(engine, ko.audioErrors.closed);
           } else {
             setPhase("suspended");
           }
@@ -81,13 +103,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
         },
         onProcessorError: () => {
           if (engineRef.current !== engine) return;
-          engineRef.current = null;
-          release(engine);
-          setSampleRate(null);
-          setTransport(null);
-          setMetronomeEnabled(null);
-          setPhase("error");
-          setIssue(ko.audioErrors.processorFailed);
+          void closeAudio(engine, ko.audioErrors.processorFailed);
         },
       }, input, loop);
     } catch (error) {
@@ -99,50 +115,32 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
     engineRef.current = engine;
     try {
       await engine.initialize();
-      if (engineRef.current !== engine) return;
+      if (engineRef.current !== engine || operation !== operationRef.current) return;
       setSampleRate(engine.sampleRate);
       setPhase(engine.state === "running" ? "ready" : "suspended");
     } catch (error) {
-      if (engineRef.current !== engine) return;
-      await engine.dispose().catch(() => undefined);
-      engineRef.current = null;
-      setSampleRate(null);
-      setTransport(null);
-      setMetronomeEnabled(null);
-      setPhase("error");
-      setIssue(errorMessage(error, ko.audioErrors.startFailed));
+      if (engineRef.current !== engine || operation !== operationRef.current) return;
+      await closeAudio(engine, errorMessage(error, ko.audioErrors.startFailed));
     }
   }
 
   async function stopAudio(): Promise<void> {
     const engine = engineRef.current;
     if (!engine) return;
-    engineRef.current = null;
-    setPhase("stopping");
-    setTransport(null);
-    setMetronomeEnabled(null);
-    try {
-      await engine.dispose();
-      setPhase("idle");
-      setIssue(null);
-    } catch {
-      setPhase("error");
-      setIssue(ko.audioErrors.closeFailed);
-    } finally {
-      setSampleRate(null);
-    }
+    await closeAudio(engine);
   }
 
   async function resumeAudio(): Promise<void> {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine || closingRef.current) return;
+    const operation = ++operationRef.current;
     setPhase("starting");
     setIssue(null);
     try {
       await engine.resume();
-      if (engineRef.current === engine) setPhase("ready");
+      if (engineRef.current === engine && operation === operationRef.current) setPhase("ready");
     } catch (error) {
-      if (engineRef.current !== engine) return;
+      if (engineRef.current !== engine || operation !== operationRef.current) return;
       setPhase("suspended");
       setIssue(errorMessage(error, ko.audioErrors.resumeFailed));
     }
