@@ -1,3 +1,5 @@
+import { MUSIC_INPUT_PROCESSING, readProcessingCapabilities, type InputProcessingCapabilities, type InputProcessingKey } from "./input-processing";
+
 export type MicrophoneErrorCode =
   | "insecure-context"
   | "unsupported"
@@ -26,6 +28,7 @@ export type MicrophoneInfo = {
   deviceId: string | null;
   label: string;
   settings: MediaTrackSettings;
+  processing: InputProcessingCapabilities;
 };
 
 type MicrophoneCallbacks = {
@@ -99,9 +102,7 @@ export class MicrophoneSession {
     this.assertActive();
     const version = ++this.requestVersion;
     const audio: MediaTrackConstraints = {
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false,
+      ...MUSIC_INPUT_PROCESSING,
       ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
     };
 
@@ -130,12 +131,42 @@ export class MicrophoneSession {
     track.addEventListener("ended", this.handleTrackEnded);
     void this.refreshDevices();
 
-    const settings = track.getSettings();
+    const info = this.readInfo(deviceId);
+    if (!info) { this.stopActiveStream(); throw new MicrophoneError("device-not-found"); }
+    return info;
+  }
+
+  readInfo(deviceId?: string): MicrophoneInfo | null {
+    const track = this.track;
+    if (!track || !this.active) return null;
+    let settings: MediaTrackSettings = {};
+    try { settings = track.getSettings(); } catch { /* Never reuse stale reported settings. */ }
     return {
       deviceId: settings.deviceId ?? deviceId ?? null,
       label: track.label,
       settings,
+      processing: readProcessingCapabilities(track, this.mediaDevices),
     };
+  }
+
+  async applyProcessing(key: InputProcessingKey, enabled: boolean): Promise<MicrophoneInfo> {
+    this.assertActive();
+    const track = this.track;
+    const version = this.requestVersion;
+    if (!track || !this.active) throw new MicrophoneError("device-not-found");
+    if (readProcessingCapabilities(track, this.mediaDevices)[key] !== "available") throw new MicrophoneError("unsupported");
+    try {
+      // applyConstraints replaces constraints: retain device selection and other options.
+      await track.applyConstraints({ ...track.getConstraints(), [key]: { exact: enabled } });
+    } catch (error) {
+      if (this.disposed || version !== this.requestVersion || track !== this.track) throw new MicrophoneError("cancelled");
+      throw requestError(error);
+    }
+    if (this.disposed || version !== this.requestVersion || track !== this.track) throw new MicrophoneError("cancelled");
+    // Ended tracks can resolve applyConstraints successfully; that is not an applied result.
+    const info = this.readInfo();
+    if (!info) throw new MicrophoneError("device-not-found");
+    return info;
   }
 
   cancelPending(): void {

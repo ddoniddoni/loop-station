@@ -1,8 +1,9 @@
 import { isInputMeterSnapshot, type InputMeterSnapshot } from "./input-meter";
 import { MicrophoneInputBus } from "./microphone-input-bus";
 import { MicrophoneError, MicrophoneSession, type MicrophoneDevice, type MicrophoneErrorCode, type MicrophoneInfo } from "./microphone-session";
+import { isInputProcessingKey, MUSIC_INPUT_PROCESSING, type InputProcessingKey, type InputProcessingRequest } from "./input-processing";
 
-export type MicrophonePhase = "idle" | "requesting" | "switching" | "active" | "error" | "disconnected" | "unavailable";
+export type MicrophonePhase = "idle" | "requesting" | "switching" | "applying" | "active" | "error" | "disconnected" | "unavailable";
 
 export type MicrophoneSnapshot = {
   phase: MicrophonePhase;
@@ -17,11 +18,15 @@ export type MicrophoneSnapshot = {
   monitorVolume: number;
   captureLocked: boolean;
   meter: InputMeterSnapshot | null;
+  processingRequested: InputProcessingRequest;
+  processingPending: { key: InputProcessingKey; requested: boolean } | null;
+  processingError: { key: InputProcessingKey; requested: boolean; code: MicrophoneErrorCode } | null;
 };
 
 const initialSnapshot: MicrophoneSnapshot = {
   phase: "idle", info: null, devices: [], issue: null, listUnavailable: false,
   audioReady: false, routed: false, gainDb: 0, monitorEnabled: false, monitorVolume: 20, meter: null, captureLocked: false,
+  processingRequested: MUSIC_INPUT_PROCESSING, processingPending: null, processingError: null,
 };
 
 // Browser objects stay here; React subscribes only to the lightweight snapshot.
@@ -64,12 +69,12 @@ export class MicrophoneController {
   }
 
   acceptMeter(value: unknown): void {
-    if (!this.snapshot.audioReady || !this.snapshot.routed || !isInputMeterSnapshot(value) || value.revision !== this.revision) return;
+    if (!this.canControl() || !isInputMeterSnapshot(value) || value.revision !== this.revision) return;
     this.update({ meter: value });
   }
 
   async request(deviceId?: string): Promise<void> {
-    if (this.snapshot.captureLocked) return;
+    if (this.snapshot.captureLocked || this.snapshot.phase === "applying") return;
     const version = ++this.requestVersion;
     this.disableMonitor();
     this.update({ phase: this.session?.active ? "switching" : "requesting", issue: null });
@@ -77,7 +82,7 @@ export class MicrophoneController {
       const session = this.getSession();
       const info = await session.request(deviceId);
       if (version !== this.requestVersion) return;
-      this.update({ phase: "active", info });
+      this.update({ phase: "active", info, processingRequested: MUSIC_INPUT_PROCESSING, processingError: null });
       this.routeInput();
     } catch (error) {
       if (version !== this.requestVersion) return;
@@ -90,6 +95,7 @@ export class MicrophoneController {
   }
 
   cancelRequest(): void {
+    if (this.snapshot.phase !== "requesting" && this.snapshot.phase !== "switching") return;
     this.requestVersion += 1;
     this.session?.cancelPending();
     this.update({ phase: this.session?.active ? "active" : "idle", issue: this.session?.active ? null : "cancelled" });
@@ -109,7 +115,36 @@ export class MicrophoneController {
   }
 
   retryRouting(): void {
+    if (this.snapshot.captureLocked || this.snapshot.phase !== "active") return;
     this.routeInput();
+  }
+
+  async setProcessing(key: InputProcessingKey, enabled: boolean): Promise<void> {
+    if (!isInputProcessingKey(key) || typeof enabled !== "boolean" || !this.canControl() || this.snapshot.captureLocked) return;
+    if (this.snapshot.info?.processing[key] !== "available" || !this.session) return;
+    const version = ++this.requestVersion;
+    const session = this.session;
+    this.disableMonitor();
+    this.update({ phase: "applying", processingPending: { key, requested: enabled }, processingError: null, meter: null });
+    this.resetMeter();
+    try {
+      const info = await session.applyProcessing(key, enabled);
+      if (version !== this.requestVersion) return;
+      this.update({ phase: "active", info, processingPending: null,
+        processingRequested: { ...this.snapshot.processingRequested, [key]: enabled } });
+    } catch (error) {
+      if (version !== this.requestVersion) return;
+      if (!session.active) { this.release(); this.update({ phase: "disconnected" }); return; }
+      this.update({ phase: "active", info: session.readInfo(), processingPending: null,
+        processingError: { key, requested: enabled, code: error instanceof MicrophoneError ? error.code : "unknown" } });
+    }
+    // The same stream and gain remain connected on success or rejection. Never reopen monitoring.
+    if (version === this.requestVersion) this.resetMeter();
+  }
+
+  refreshProcessing(): void {
+    if (!this.canControl() || this.snapshot.captureLocked) return;
+    this.update({ info: this.session?.readInfo() ?? null });
   }
 
   setGain(db: number): void {
@@ -180,7 +215,7 @@ export class MicrophoneController {
 
   private resetMeter(): void {
     this.revision += 1;
-    this.node?.port.postMessage({ type: "input-route", revision: this.revision, active: this.snapshot.routed && this.snapshot.audioReady });
+    this.node?.port.postMessage({ type: "input-route", revision: this.revision, active: this.snapshot.routed && this.snapshot.audioReady && this.snapshot.phase !== "applying" });
   }
 
   private disableMonitor(): void {

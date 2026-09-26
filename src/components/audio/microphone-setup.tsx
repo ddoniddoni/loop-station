@@ -6,12 +6,14 @@ import type { MicrophoneDevice, MicrophoneInfo } from "@/audio/input/microphone-
 import type { MicrophonePhase } from "@/audio/input/microphone-controller";
 import { useMicrophoneController } from "@/components/audio/audio-engine-provider";
 import { MicrophoneInputControls } from "@/components/audio/microphone-input-controls";
+import { InputProcessingControls } from "@/components/audio/input-processing-controls";
 import { ko } from "@/lib/i18n/ko";
 
 const phaseStatus: Record<MicrophonePhase, string> = {
   idle: ko.microphoneIdle,
   requesting: ko.microphoneRequesting,
   switching: ko.microphoneSwitching,
+  applying: ko.inputProcessingApplying,
   active: ko.microphoneActive,
   error: ko.microphoneErrors.unknown,
   disconnected: ko.microphoneDisconnected,
@@ -32,9 +34,6 @@ function InputSettings({ info }: { info: MicrophoneInfo }) {
       <dl className="mt-2 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
         <dt>{ko.microphoneChannelCount}</dt><dd>{setting(settings.channelCount)}</dd>
         <dt>{ko.microphoneSampleRate}</dt><dd>{setting(settings.sampleRate)}{settings.sampleRate === undefined ? "" : " Hz"}</dd>
-        <dt>{ko.microphoneEchoCancellation}</dt><dd>{setting(settings.echoCancellation)}</dd>
-        <dt>{ko.microphoneNoiseSuppression}</dt><dd>{setting(settings.noiseSuppression)}</dd>
-        <dt>{ko.microphoneAutoGainControl}</dt><dd>{setting(settings.autoGainControl)}</dd>
       </dl>
     </div>
   );
@@ -86,7 +85,7 @@ function MicrophoneControls({ phase, onRequest, onCancel, onRelease }: {
       {(phase === "requesting" || phase === "switching") && (
         <Button type="button" variant="outline" onClick={onCancel}>{ko.microphoneCancel}</Button>
       )}
-      {(phase === "active" || phase === "switching") && (
+      {(phase === "active" || phase === "switching" || phase === "applying") && (
         <Button type="button" variant="soft" color="gray" onClick={onRelease}>{ko.microphoneRelease}</Button>
       )}
     </Flex>
@@ -101,11 +100,11 @@ function MicrophoneDetails({ phase, info, devices, listUnavailable, captureLocke
   captureLocked: boolean;
   onSelect: (deviceId?: string) => void;
 }) {
-  if (!info || (phase !== "active" && phase !== "switching")) return null;
+  if (!info || (phase !== "active" && phase !== "switching" && phase !== "applying")) return null;
 
   return (
     <>
-      {devices.length > 0 && <DeviceSelect devices={devices} info={info} disabled={phase === "switching" || captureLocked} onSelect={onSelect} />}
+      {devices.length > 0 && <DeviceSelect devices={devices} info={info} disabled={phase !== "active" || captureLocked} onSelect={onSelect} />}
       {captureLocked && <Text as="p" size="2" color="gray" mt="2">녹음이 끝나거나 취소된 뒤 입력 장치를 변경할 수 있습니다.</Text>}
       {listUnavailable && <Text as="p" size="2" color="amber" mt="3">{ko.microphoneListUnavailable}</Text>}
       <InputSettings info={info} />
@@ -143,6 +142,7 @@ export function MicrophoneSetup() {
         captureLocked={snapshot.captureLocked}
         onSelect={(id) => void controller.request(id)}
       />
+      <InputProcessingControls controller={controller} snapshot={snapshot} />
     </section>
   );
 }

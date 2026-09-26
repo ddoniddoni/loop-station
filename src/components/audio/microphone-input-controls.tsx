@@ -43,6 +43,14 @@ function InputMeter({ meter, enabled, onClearClip }: { meter: InputMeterSnapshot
   );
 }
 
+function inputControlsReason(snapshot: MicrophoneSnapshot): string {
+  if (!snapshot.audioReady) return ko.inputNeedsAudio;
+  if (snapshot.issue === "routing-failed") return ko.inputRoutingHint;
+  if (snapshot.phase === "applying") return ko.inputProcessingApplying;
+  if (snapshot.phase === "switching") return ko.microphoneSwitching;
+  return ko.inputNeedsMicrophone;
+}
+
 export function MicrophoneInputControls({ controller, snapshot }: {
   controller: MicrophoneController;
   snapshot: MicrophoneSnapshot;
@@ -52,9 +60,7 @@ export function MicrophoneInputControls({ controller, snapshot }: {
 
   return (
     <div className="station-input-controls">
-      {!ready && <Text as="p" id="input-controls-reason" size="2" color="gray">{
-        !snapshot.audioReady ? ko.inputNeedsAudio : snapshot.issue === "routing-failed" ? ko.inputRoutingHint : snapshot.phase === "switching" ? ko.microphoneSwitching : ko.inputNeedsMicrophone
-      }</Text>}
+      {!ready && <Text as="p" id="input-controls-reason" size="2" color="gray">{inputControlsReason(snapshot)}</Text>}
       {snapshot.issue === "routing-failed" && snapshot.audioReady && (
         <Button type="button" variant="outline" onClick={() => controller.retryRouting()}>{ko.inputRetryRouting}</Button>
       )}
