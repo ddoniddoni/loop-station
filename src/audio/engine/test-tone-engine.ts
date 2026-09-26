@@ -83,7 +83,7 @@ export class TestToneEngine {
     const node = new AudioWorkletNode(this.context, "loop-station-test-tone", {
       numberOfInputs: 1,
       numberOfOutputs: 4,
-      outputChannelCount: [1, 1, 1, 1],
+      outputChannelCount: [1, 1, 1, 2],
       channelCount: 1,
       channelCountMode: "explicit",
     });
@@ -117,7 +117,7 @@ export class TestToneEngine {
     this.toneGain = toneGain;
     this.clickGain = clickGain;
     this.loopGain = this.context.createGain();
-    this.loopGain.gain.value = 0.5;
+    this.loopGain.gain.value = 1; // Master gain and stereo output metering live in the Worklet.
     node.connect(this.loopGain, 3);
     this.loopGain.connect(this.context.destination);
     node.connect(toneGain, 0);

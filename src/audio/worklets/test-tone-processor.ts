@@ -82,7 +82,8 @@ class TestToneProcessor extends AudioWorkletProcessor {
     const clickChannels = outputs[1];
     const input = this.inputActive ? inputs[0]?.[0] : undefined;
     const monitor = outputs[2]?.[0];
-    const loopOutput = outputs[3]?.[0];
+    const loopLeft = outputs[3]?.[0];
+    const loopRight = outputs[3]?.[1];
     const frameCount = channels?.[0]?.length ?? 0;
     this.blockFrames = frameCount;
     const blockPositionFrame = this.clock.positionFrame;
@@ -103,8 +104,9 @@ class TestToneProcessor extends AudioWorkletProcessor {
     for (let frame = 0; frame < frameCount; frame += 1) {
       const inputSample = input?.[frame];
       const sample = inputSample !== undefined && Number.isFinite(inputSample) ? inputSample : 0;
-      const loopSample = this.loop.nextSample(inputSample, blockPositionFrame + frame);
-      if (loopOutput && frame < loopOutput.length) loopOutput[frame] = loopSample;
+      this.loop.nextSample(inputSample, blockPositionFrame + frame);
+      if (loopLeft && frame < loopLeft.length) loopLeft[frame] = this.loop.left;
+      if (loopRight && frame < loopRight.length) loopRight[frame] = this.loop.right;
       if (inputSample !== undefined) this.inputMeter.add(sample);
       // Monitor limiting never changes the PCM captured by the loop above.
       if (monitor && frame < monitor.length) monitor[frame] = Math.max(-1, Math.min(1, sample));

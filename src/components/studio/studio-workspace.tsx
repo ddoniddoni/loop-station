@@ -4,6 +4,7 @@ import { Badge, Button, Heading, Text } from "@radix-ui/themes";
 import { useState } from "react";
 import { EnvironmentDiagnostics } from "@/components/audio/environment-diagnostics";
 import { StudioInputPanel } from "@/components/studio/studio-input-panel";
+import { MixerConsole } from "@/components/studio/mixer-console";
 import { RecordedClipDetails, RecordingTrack } from "@/components/studio/recording-track";
 import { StudioMobileNavigation, type StudioView } from "@/components/studio/studio-navigation";
 import { StudioIcon } from "@/components/ui/studio-icon";
@@ -70,18 +71,6 @@ function InspectorPanel({ selected }: { selected: TrackSlot }) {
   );
 }
 
-function MixerConsole({ bank }: { bank: number }) {
-  return (
-    <section id="mixer" tabIndex={-1} className="station-mixer" data-bank={bank} aria-labelledby="mixer-title">
-      <div className="station-mixer-heading"><Heading as="h2" id="mixer-title" size="2"><StudioIcon name="mixer" size={16} />MIXER CONSOLE <span>| 8 Tracks + Master Stereo Bus</span></Heading><Text as="span" size="1" color="gray">믹서 준비 중</Text></div>
-      <div className="station-mixer-channels">
-        {trackSlots.map((slot) => <div className="station-mixer-channel" data-tone={slot.tone} data-bank={Number(slot.number) <= 4 ? 0 : 1} key={slot.number}><div className="station-mixer-channel-head"><span>{slot.number} {slot.name}</span><span>—</span></div><div className="station-mixer-pan" aria-hidden="true">PAN <i /> C</div><div className="station-mixer-fader" aria-hidden="true"><span /><i /></div><div className="station-mixer-channel-foot"><span>M</span><span>S</span><span className="station-record-dot" /></div></div>)}
-        <div className="station-mixer-channel station-mixer-master"><div className="station-mixer-channel-head"><span>MASTER BUS</span><span>— dB</span></div><div className="station-mixer-pan">미연결</div><div className="station-mixer-fader" aria-hidden="true"><span /><i /></div><Button variant="outline" color="gray" disabled aria-describedby="availability">BUS MUTE</Button></div>
-      </div>
-    </section>
-  );
-}
-
 export function StudioWorkspace() {
   const [selected, setSelected] = useState<TrackSlot>(trackSlots[0]);
   const [bank, setBank] = useState(0);
@@ -89,7 +78,7 @@ export function StudioWorkspace() {
   return (
     <div className="station-studio" data-view={view}>
       <div className="station-workspace"><LibraryPanel /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
-      <MixerConsole bank={bank} />
+      <MixerConsole bank={bank} onBankChange={setBank} slots={trackSlots} />
       <StudioMobileNavigation view={view} onNavigate={setView} />
     </div>
   );

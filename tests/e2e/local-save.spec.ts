@@ -38,7 +38,7 @@ async function storedFingerprint(page: Page, trackId = 0) {
         tx.onabort = () => { db.close(); reject(tx.error); };
       };
     });
-    const take = saved.history[index].current;
+    const take = saved.history.tracks[index].current;
     if (!take) throw new Error("No stored current take");
     const hash = await crypto.subtle.digest("SHA-256", take.pcm);
     return { revision: saved.revision, metadata: take.metadata, hash: Array.from(new Uint8Array(hash)) };
