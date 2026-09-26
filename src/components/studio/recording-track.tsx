@@ -7,6 +7,9 @@ import { useLoopController, useMicrophoneController } from "@/components/audio/a
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { saveStatusLabel } from "./loop-save-label";
 import { trackIsEditing, workspaceBlocksTrack } from "./track-availability";
+import { RecordingLength } from "./recording-length";
+
+function barsLabel(bars: number): string { return `${bars} ${bars === 1 ? "BAR" : "BARS"}`; }
 
 const labels: Record<LoopSnapshot["phase"], string> = {
   empty: "EMPTY", preparing: "PREPARING", armed: "ARMED", recording: "RECORDING",
@@ -30,7 +33,7 @@ function RecordingAction({ snapshot, inputReady, trackId }: { snapshot: LoopSnap
     </Button>;
   }
   return <Button className="station-track-action" variant="outline" disabled={!snapshot.connected || !inputReady || blocked} aria-describedby={`recording-hint-${trackId}`}
-    onClick={() => void controller.record()}><span className="station-record-dot" /><span>[ RECORD 4 BARS ]<small>4마디 녹음</small></span></Button>;
+    onClick={() => void controller.record()}><span className="station-record-dot" /><span>[ RECORD {barsLabel(snapshot.recordBars)} ]<small>{snapshot.recordBars}마디 녹음</small></span></Button>;
 }
 
 function LoopEditControls({ snapshot, inputReady, trackId }: { snapshot: LoopSnapshot; inputReady: boolean; trackId: number }) {
@@ -60,21 +63,21 @@ function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
   if (snapshot.historyPending) return `다음 루프 경계에서 ${snapshot.historyPending === "undo" ? "Undo" : "Redo"} 적용`;
   if (snapshot.phase === "preparing") return "녹음 용량을 확인하고 있습니다.";
   if (snapshot.phase === "armed") return snapshot.captureMode === "overdub" ? "다음 루프부터 한 바퀴 덧녹음" : "다음 마디에서 녹음 시작";
-  if (snapshot.phase === "recording") return "입력 녹음 중 · 4마디 후 자동 반복";
+  if (snapshot.phase === "recording") return `입력 녹음 중 · ${snapshot.recordBars}마디 후 자동 반복`;
   if (snapshot.phase === "overdubbing") return "오버더빙 중 · 한 바퀴 후 자동 확정";
   if (snapshot.phase === "incomplete") return "중단된 녹음 · 부분 데이터 보관 중";
   if (snapshot.pendingPlay) return "다음 마디에서 재생 시작";
   if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크를 연결하세요.";
   if (snapshot.canRestore) return "비운 루프 복구 가능 · 다음 녹음 완료 전까지";
   if (!inputReady) return "입력 설정에서 마이크를 연결하세요.";
-  return "다음 마디부터 4마디 · 모노 입력";
+  return `다음 마디부터 ${snapshot.recordBars}마디 · 모노 입력`;
 }
 
 function RecordingWindow({ snapshot }: { snapshot: LoopSnapshot }) {
   const duration = snapshot.metadata ? (snapshot.metadata.frames / snapshot.metadata.sampleRate).toFixed(1) : null;
   return <div className="station-track-window station-recording-window">
     <StudioIcon name={snapshot.hasClip ? "loop" : "wave"} size={20} />
-    <Text as="p" size="1">{duration ? `${duration}s · ${snapshot.metadata?.complete ? "4 BARS" : "PARTIAL"}` : "4 BARS · MONO"}</Text>
+    <Text as="p" size="1">{duration ? `${duration}s · ${snapshot.metadata?.complete ? barsLabel(snapshot.recordBars) : "PARTIAL"}` : `${barsLabel(snapshot.recordBars)} · MONO`}</Text>
     <progress max={1} value={snapshot.progress} aria-label={snapshot.phase === "overdubbing" ? "오버더빙 진행" : snapshot.phase === "recording" ? "녹음 진행" : "루프 재생 위치"} />
   </div>;
 }
@@ -94,6 +97,7 @@ export function RecordingTrack({ trackId, name, tone, selected, onSelect }: { tr
           <span className="station-track-state">{snapshot.pendingPlay || snapshot.historyPending ? "QUEUED" : labels[snapshot.phase]}</span>
         </div>
         <RecordingWindow snapshot={snapshot} />
+        <RecordingLength trackId={trackId} snapshot={snapshot} />
         <LoopEditControls trackId={trackId} snapshot={snapshot} inputReady={inputReady} />
         <RecordingAction trackId={trackId} snapshot={snapshot} inputReady={inputReady} />
         <p id={`recording-hint-${trackId}`} className="station-recording-hint" role="status">{recordingHint(snapshot, inputReady)}</p>
@@ -109,7 +113,7 @@ export function RecordedClipDetails({ trackId }: { trackId: number }) {
   const controller = useLoopController(trackId);
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getServerSnapshot);
   const meta = snapshot.metadata;
-  return <><div className="station-clip-fields"><div><span>LOOP MODE</span><strong>{meta?.complete ? "4 BARS" : "—"}</strong></div><div><span>LENGTH</span><strong>{meta ? `${(meta.frames / meta.sampleRate).toFixed(2)}s` : "—"}</strong></div></div>
-    <Text as="p" size="1" color="gray" mt="2">{meta ? `${meta.frames.toLocaleString()} frames · ${meta.sampleRate / 1000}kHz · ${meta.bpm} BPM` : "선택한 트랙에서 4마디를 녹음할 수 있습니다."}</Text>
+  return <><div className="station-clip-fields"><div><span>{meta ? "LOOP MODE" : "NEXT RECORD"}</span><strong>{meta && !meta.complete ? "PARTIAL" : barsLabel(snapshot.recordBars)}</strong></div><div><span>LENGTH</span><strong>{meta ? `${(meta.frames / meta.sampleRate).toFixed(2)}s` : "—"}</strong></div></div>
+    <Text as="p" size="1" color="gray" mt="2">{meta ? `${meta.frames.toLocaleString()} frames · ${meta.sampleRate / 1000}kHz · ${meta.bpm} BPM` : `선택한 트랙에서 ${snapshot.recordBars}마디를 녹음할 수 있습니다. 녹음 전 길이 선택은 이 탭에서만 유지됩니다.`}</Text>
     <Text as="p" size="1" color="gray" mt="2">한 바퀴 오버더빙 · 직전 1회 Undo/Redo · 이 브라우저에 자동 저장. 입력 게인 적용 후 녹음하며 클릭은 제외합니다. 지연 보정은 준비 중입니다.</Text></>;
 }

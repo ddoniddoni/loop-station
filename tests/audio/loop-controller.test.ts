@@ -9,8 +9,8 @@ function fixture(bpm = 120, repository: LoopRepository | null = null) {
   const inputState = { ...input.getSnapshot(), phase: "active" as const, routed: true };
   vi.spyOn(input, "getSnapshot").mockReturnValue(inputState);
   const controller = new LoopController(input, repository);
-  const messages: { type: string; sequence: number }[] = [];
-  const port = { postMessage(value: { type: string; sequence: number }, transfer: Transferable[] = []) {
+  const messages: { type: string; sequence: number; bars?: number; pcm?: ArrayBuffer }[] = [];
+  const port = { postMessage(value: typeof messages[number], transfer: Transferable[] = []) {
     messages.push(structuredClone(value, { transfer }));
   } };
   controller.attach({ sampleRate: 48000, state: "running" } as AudioContext, { port } as unknown as AudioWorkletNode);
@@ -22,8 +22,10 @@ function fixture(bpm = 120, repository: LoopRepository | null = null) {
       totalFrames: phase === "empty" ? 0 : metadata.frames, position: 0, pendingPlay: false, issue: null });
   }
   function captured(sequence: number, mode: CaptureMode) {
-    const pcm = new ArrayBuffer(recordingCapacity(48000, config) * 4);
-    controller.accept({ type: "loop-captured", sequence, captureMode: mode, pcm, metadata });
+    const bars = controller.getSnapshot().recordBars;
+    const pcm = new ArrayBuffer(recordingCapacity(48000, config, bars) * 4);
+    controller.accept({ type: "loop-captured", sequence, captureMode: mode, pcm,
+      metadata: { ...metadata, ticks: bars * 3840, frames: metadata.frames / 4 * bars } });
   }
   async function complete(mode: CaptureMode) {
     await (mode === "record" ? controller.record() : controller.overdub());
@@ -41,6 +43,55 @@ function storage() {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("loop command acknowledgements and preflight", () => {
+  it("freezes the chosen length across async preflight and unlocks it after cancellation", async () => {
+    let resolve!: (value: StorageEstimate) => void;
+    vi.stubGlobal("navigator", { storage: { estimate: () => new Promise<StorageEstimate>((yes) => { resolve = yes; }) } });
+    const f = fixture(120, { load: async () => null, save: vi.fn() });
+    await f.controller.initializeStorage();
+    f.controller.setRecordBars(2);
+    f.controller.setRecordBars(3);
+    const pending = f.controller.record();
+    f.controller.setRecordBars(8);
+    expect(f.controller.getSnapshot().recordBars).toBe(2);
+    resolve({ quota: 1024 ** 3, usage: 0 });
+    await pending;
+    expect(f.messages.at(-1)).toMatchObject({ type: "loop-record", bars: 2 });
+    expect(f.messages.at(-1)?.pcm?.byteLength).toBe(recordingCapacity(48000, { bpm: 120, numerator: 4, denominator: 4 }, 2) * 4);
+    f.controller.cancel();
+    f.controller.setRecordBars(8);
+    expect(f.controller.getSnapshot().recordBars).toBe(8);
+  });
+
+  it.each([1, 8])("allocates overdub from the captured %i-bar length and restores it after Clear", async (bars) => {
+    const f = fixture();
+    f.controller.setRecordBars(bars);
+    await f.complete("record");
+    f.controller.setRecordBars(2);
+    expect(f.controller.getSnapshot().recordBars).toBe(bars);
+    await f.complete("overdub");
+    const command = f.messages.at(-1)!;
+    expect(command).toMatchObject({ type: "loop-overdub", bars });
+    expect(command.pcm?.byteLength).toBe(f.controller.historyState.current?.pcm.byteLength);
+    f.controller.clear();
+    f.controller.setRecordBars(2);
+    f.controller.restore();
+    expect(f.controller.getSnapshot()).toMatchObject({ recordBars: bars, canUndo: true, phase: "stopped" });
+  });
+
+  it("rejects an eight-bar take above the memory budget while preserving cleared PCM", async () => {
+    const f = fixture(40);
+    await f.complete("record");
+    f.controller.clear();
+    const original = f.controller.historyState.cleared;
+    f.controller.setRecordBars(8);
+    const count = f.messages.length;
+    await f.controller.record();
+    expect(f.messages).toHaveLength(count);
+    expect(f.controller.getSnapshot()).toMatchObject({ phase: "empty", recordBars: 8, canRestore: true });
+    expect(f.controller.getSnapshot().issue).toContain("32MiB");
+    expect(f.controller.historyState.cleared).toEqual(original);
+  });
+
   it("keeps capture locked across stale status messages and cancels an unresolved preflight", async () => {
     let resolveEstimate: (estimate: StorageEstimate) => void = () => { throw new Error("No pending estimate"); };
     vi.stubGlobal("navigator", { storage: { estimate: () => new Promise<StorageEstimate>((resolve) => { resolveEstimate = resolve; }) } });

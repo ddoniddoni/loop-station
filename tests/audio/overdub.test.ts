@@ -7,7 +7,7 @@ import { isLoopMetadata, recordingCapacity, type LoopMetadata } from "../../src/
 const standard: TransportConfig = { bpm: 120, numerator: 4, denominator: 4 };
 type Take = { metadata: LoopMetadata; pcm: ArrayBuffer };
 
-function fixture(rate = 48000, config = standard) {
+function fixture(rate = 48000, config = standard, bars = 4) {
   const messages: unknown[] = [];
   const takes: Take[] = [];
   const clock = new AudioFrameClock(rate);
@@ -29,7 +29,7 @@ function fixture(rate = 48000, config = standard) {
     return sequence;
   }
   function buffers() {
-    const bytes = recordingCapacity(rate, config) * 4;
+    const bytes = recordingCapacity(rate, config, bars) * 4;
     return { pcm: new ArrayBuffer(bytes), archive: new ArrayBuffer(bytes) };
   }
   function render(until: number, input: number | undefined = 0.125) {
@@ -45,16 +45,28 @@ function fixture(rate = 48000, config = standard) {
     return last;
   }
   const bar = ticksPerBar(config.numerator, config.denominator);
-  command("loop-record", { config, ...buffers() });
-  render(clock.frameAtTick(bar * 5), 0.25);
+  command("loop-record", { config, bars, ...buffers() });
+  render(clock.frameAtTick(bar * (1 + bars)), 0.25);
   render(clock.positionFrame + 1, 0);
-  const boundary = (cycle: number) => clock.frameAtTick(bar * 5 + cycle * bar * 4);
+  const boundary = (cycle: number) => clock.frameAtTick(bar * (1 + bars) + cycle * bar * bars);
   const overdub = () => command("loop-overdub", buffers());
   const revision = (take: Take) => command("loop-revision", { metadata: take.metadata, pcm: take.pcm.slice(0) });
   return { loop, clock, messages, takes, command, render, boundary, overdub, revision };
 }
 
 describe("one-cycle overdub and revision boundaries", () => {
+  it.each([1, 2, 8])("overdubs and undoes a %i-bar loop without changing its duration", (bars) => {
+    const f = fixture(48000, standard, bars);
+    f.overdub();
+    expect(f.render(f.boundary(2))).toBe(0.25);
+    expect(f.takes[1].metadata).toMatchObject({ ticks: bars * 3840, frames: bars * 96000 });
+    expect(f.render(f.boundary(2) + 1)).toBe(0.375);
+    expect(new Float32Array(f.takes[0].pcm)[0]).toBe(0.25);
+    f.revision(f.takes[0]);
+    expect(f.render(f.boundary(3))).toBe(0.375);
+    expect(f.render(f.boundary(3) + 1)).toBe(0.25);
+  });
+
   it("plays A during capture, commits float32 A+B once, and leaves A immutable", () => {
     const f = fixture();
     const original = new Float32Array(f.takes[0].pcm);

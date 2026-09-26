@@ -151,6 +151,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .station-recording-track[data-recording="true"] { border-top-color: #ff4057; }
 .station-recording-track[data-recording="true"] .station-track-state { color: #ff8d9b; }
 .station-recording-window progress { width: 85%; height: 5px; accent-color: var(--station-mint); }
+.station-recording-length { padding-block: 6px; }
+.station-recording-length-field { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.station-recording-length-field label { color: var(--station-muted); font-size: 11px; }
+.station-recording-length-field .rt-SelectTrigger { min-height: 44px; min-width: 80px; font-size: 12px; }
 .station-recording-track .station-track-action:not(:disabled) { color: #59ed98; border: 1px solid var(--station-mint); background: #13231b; }
 .station-recording-track .station-track-action small { display: block; }
 .station-recording-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding-block: 8px; }
@@ -335,6 +339,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .station-tool-long { display: inline; }
   .station-recording-track .station-recording-window { flex-direction: column; gap: 3px; }
   .station-recording-track .station-recording-window > .station-icon { display: none; }
+  .station-recording-track .station-recording-length { grid-row: 3; }
+  .station-recording-track .station-track-action { grid-row: 4; }
+  .station-recording-track .station-recording-tools { grid-row: 5; }
   .station-recording-track .station-recording-tools { grid-template-columns: 1fr 1fr; }
   .station-recording-track .station-recording-tools .rt-Button { min-height: 36px; }
   .station-recording-hint, .station-recording-issue { margin: 0; font-size: 11px; }

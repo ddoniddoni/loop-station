@@ -4,7 +4,7 @@ import { LoopHistory, type CachedLoop, type HistoryDirection, type LoopHistorySt
 import { IndexedDbLoopRepository } from "../storage/indexed-db-loop-repository";
 import { initialSaveState, LoopPersistence, type LoopSaveState } from "../storage/loop-persistence";
 import type { LoopRepository } from "../storage/loop-session";
-import { isLoopMetadata, isLoopStatus, LOOP_MEMORY_BYTES, recordingCapacity, type CaptureMode, type LoopMetadata, type LoopPhase, type LoopStatus } from "./loop-protocol";
+import { isLoopMetadata, isLoopStatus, isRecordBars, loopBars, LOOP_MEMORY_BYTES, RECORD_BARS, recordingCapacity, type CaptureMode, type LoopMetadata, type LoopPhase, type LoopStatus, type RecordBars } from "./loop-protocol";
 
 export type LoopWorkspace = {
   trackId: number;
@@ -20,6 +20,7 @@ export type LoopWorkspace = {
 type PendingCapture = { mode: CaptureMode; sequence: number | null; generation: number };
 type PendingHistory = { direction: HistoryDirection; target: CachedLoop; sequence: number };
 export type LoopSnapshot = {
+  recordBars: RecordBars;
   phase: LoopPhase;
   captureMode: CaptureMode | null;
   connected: boolean;
@@ -38,6 +39,7 @@ export type LoopSnapshot = {
   workspaceIssue: string | null;
 };
 const initialSnapshot: LoopSnapshot = {
+  recordBars: RECORD_BARS,
   phase: "empty", captureMode: null, connected: false, hasClip: false, canRestore: false,
   canUndo: false, canRedo: false, historyPending: null, metadata: null,
   progress: 0, pendingPlay: false, issue: null, storageNote: null,
@@ -200,6 +202,12 @@ export class LoopController {
 
   acceptTransport(transport: TransportSnapshot): void { this.transport = transport; }
 
+  setRecordBars(bars: number): void {
+    if (!isRecordBars(bars) || this.locked || bars === this.snapshot.recordBars) return;
+    // This is the next take's local selection. Captured duration lives in metadata.ticks.
+    this.update({ recordBars: bars, issue: null });
+  }
+
   async record(): Promise<void> {
     if (this.locked) return;
     await this.prepareCapture("record");
@@ -216,11 +224,12 @@ export class LoopController {
     if (!input.routed || input.phase !== "active") { this.update({ issue: "입력 설정에서 마이크를 먼저 연결하세요." }); return; }
     const capture: PendingCapture = { mode, sequence: null, generation: ++this.generation };
     const node = this.node;
-    const config = this.transport;
+    const config = mode === "overdub" && this.history.current ? this.history.current.metadata : this.transport;
+    const bars = mode === "overdub" && this.history.current ? loopBars(this.history.current.metadata) : this.snapshot.recordBars;
     this.pendingCapture = capture;
     this.update({ phase: "preparing", captureMode: mode, issue: null, storageNote: null });
     try {
-      const bytes = recordingCapacity(this.context.sampleRate, config) * Float32Array.BYTES_PER_ELEMENT;
+      const bytes = recordingCapacity(this.context.sampleRate, config, bars) * Float32Array.BYTES_PER_ELEMENT;
       if (bytes * 4 + this.history.retainedBytes * 2 > LOOP_MEMORY_BYTES) throw new Error("32MiB 작업 메모리가 부족합니다. 기존 루프와 복구 이력은 유지됩니다.");
       if (this.workspace && bytes * 4 + this.workspace.getRetainedBytes() * 3 > this.workspace.memoryLimit) throw new Error("프로젝트의 128MiB 작업 메모리가 부족합니다. 다른 트랙과 복구 이력은 유지됩니다.");
       const storageNote = this.saveState.phase === "session" ? "저장 없이 연주 중입니다. 변경은 이 탭에만 남습니다." : await checkStorage(bytes + (this.workspace?.getRetainedBytes() ?? 0));
@@ -230,7 +239,7 @@ export class LoopController {
       const archive = new ArrayBuffer(bytes);
       capture.sequence = ++this.sequence;
       this.update({ phase: "armed", storageNote });
-      node.port.postMessage({ trackId: this.workspace?.trackId, type: mode === "record" ? "loop-record" : "loop-overdub", sequence: capture.sequence, config, pcm, archive }, [pcm, archive]);
+      node.port.postMessage({ trackId: this.workspace?.trackId, type: mode === "record" ? "loop-record" : "loop-overdub", sequence: capture.sequence, config, bars, pcm, archive }, [pcm, archive]);
     } catch (error) {
       if (capture.generation !== this.generation) return;
       this.pendingCapture = null;
@@ -338,7 +347,10 @@ export class LoopController {
     this.node?.port.postMessage({ trackId: this.workspace?.trackId, type, sequence: ++this.sequence, captureMode });
   }
   private update(patch: Partial<LoopSnapshot>, notifyWorkspace = true): void {
+    const metadata = this.history.current?.metadata;
+    const bars = metadata ? loopBars(metadata) : null;
     this.snapshot = { ...this.snapshot, ...patch, hasClip: this.history.current !== null, metadata: this.history.current?.metadata ?? null,
+      recordBars: isRecordBars(bars) ? bars : patch.recordBars ?? this.snapshot.recordBars,
       canUndo: this.history.canUndo, canRedo: this.history.canRedo, canRestore: this.history.canRestore,
       historyPending: this.pendingHistory?.direction ?? null, save: this.saveState, blockedByTrack: this.blockedByTrack, workspaceIssue: this.workspace?.getIssue() ?? null };
     if (!this.workspace) this.input.setCaptureLocked(isCapturePhase(this.snapshot.phase));

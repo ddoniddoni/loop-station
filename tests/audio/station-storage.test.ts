@@ -5,11 +5,11 @@ import { defaultMasterMix, defaultStationMix } from "../../src/audio/loop/track-
 import { createLoopSession, digest, historyChecksum } from "../../src/audio/storage/loop-session";
 import { createStationSession, decodeStationSession, emptyStationHistory } from "../../src/audio/storage/station-session";
 
-function take(value = 0.125, bpm = 120): CachedLoop {
+function take(value = 0.125, bpm = 120, bars = 4): CachedLoop {
   const config = { bpm, numerator: 4, denominator: 4 };
-  const capacity = recordingCapacity(8000, config);
+  const capacity = recordingCapacity(8000, config, bars);
   return { pcm: new Float32Array(capacity).fill(value).buffer,
-    metadata: { ...config, sampleRate: 8000, frames: capacity - 1, ticks: 15360, complete: true } };
+    metadata: { ...config, sampleRate: 8000, frames: capacity - 1, ticks: bars * 3840, complete: true } };
 }
 
 describe("versioned eight-track project", () => {
@@ -51,11 +51,59 @@ describe("versioned eight-track project", () => {
     await expect(createStationSession({ tracks: history, mixer: defaultStationMix(), master: defaultMasterMix() })).rejects.toMatchObject({ code: "corrupt" });
     await expect(createStationSession({ tracks: history.slice(1), mixer: defaultStationMix(), master: defaultMasterMix() })).rejects.toMatchObject({ code: "corrupt" });
     await expect(createStationSession({ tracks: new Array<never>(8), mixer: defaultStationMix(), master: defaultMasterMix() })).rejects.toMatchObject({ code: "corrupt" });
-    await expect(decodeStationSession({ schemaVersion: 5 })).rejects.toMatchObject({ code: "version" });
+    await expect(decodeStationSession({ schemaVersion: 6 })).rejects.toMatchObject({ code: "version" });
   });
 });
 
-describe("stereo mixer schema v4", () => {
+describe("variable recording lengths in schema v5", () => {
+  it("round trips mixed lengths with matching Undo, incomplete PCM and cleared recovery", async () => {
+    const tracks = emptyStationHistory();
+    [1, 2, 4, 8].forEach((bars, index) => {
+      tracks[index] = { current: take(0.25, 120, bars), undo: take(0.125, 120, bars), redo: null, cleared: null };
+    });
+    tracks[4].current = take(0.5, 120, 2);
+    tracks[4].current.metadata = { ...tracks[4].current.metadata, complete: false, frames: 317 };
+    tracks[4].cleared = { current: take(0.75, 120, 8), undo: null, redo: null };
+    const project = { tracks, mixer: defaultStationMix(), master: defaultMasterMix() };
+    const saved = await createStationSession(project);
+    expect(saved.schemaVersion).toBe(5);
+    expect((await decodeStationSession(structuredClone(saved))).history).toEqual(project);
+  });
+
+  it("verifies v4 checksums and migrates read-only without changing PCM, mixer or revision", async () => {
+    const tracks = emptyStationHistory();
+    tracks[0].current = take();
+    tracks[0].undo = take(0.25);
+    const mixer = defaultStationMix().map((mix) => ({ ...mix, pan: -0.5 }));
+    const master = { gainDb: -9, mute: true };
+    const hashes = await Promise.all(tracks.map(historyChecksum));
+    const legacy = { schemaVersion: 4, revision: "v4-mix", updatedAt: 123, history: { tracks, mixer, master },
+      checksum: await digest(new TextEncoder().encode(JSON.stringify({ schemaVersion: 4, tracks: hashes, mixer, master })).buffer) };
+    const original = structuredClone(legacy);
+    const migrated = await decodeStationSession(legacy);
+    expect(migrated).toMatchObject({ schemaVersion: 5, revision: legacy.revision, updatedAt: legacy.updatedAt, history: legacy.history });
+    expect(legacy).toEqual(original);
+    const saved = await createStationSession(migrated.history);
+    expect((await decodeStationSession(saved)).history).toEqual(legacy.history);
+    legacy.history.master.mute = false;
+    await expect(decodeStationSession(legacy)).rejects.toMatchObject({ code: "corrupt" });
+  });
+
+  it("rejects unsupported lengths, mismatched PCM capacity and Undo from another duration", async () => {
+    const tracks = emptyStationHistory();
+    tracks[0].current = take(0.25, 120, 2);
+    const project = { tracks, mixer: defaultStationMix(), master: defaultMasterMix() };
+    tracks[0].current.metadata.ticks = 3 * 3840;
+    await expect(createStationSession(project)).rejects.toMatchObject({ code: "corrupt" });
+    tracks[0].current.metadata.ticks = 8 * 3840;
+    await expect(createStationSession(project)).rejects.toMatchObject({ code: "corrupt" });
+    tracks[0].current = take(0.25, 120, 2);
+    tracks[0].undo = take(0.125, 120, 1);
+    await expect(createStationSession(project)).rejects.toMatchObject({ code: "corrupt" });
+  });
+});
+
+describe("stereo mixer migration", () => {
   it("verifies v3 before adding centered pan and the previous 0.5 master gain", async () => {
     const tracks = emptyStationHistory();
     tracks[0].current = take();
@@ -65,7 +113,7 @@ describe("stereo mixer schema v4", () => {
       checksum: await digest(new TextEncoder().encode(JSON.stringify({ schemaVersion: 3, tracks: hashes, mixer })).buffer) };
     const original = structuredClone(legacy);
     const migrated = await decodeStationSession(legacy);
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(5);
     expect(migrated.revision).toBe("v3-mix");
     expect(migrated.history.mixer).toEqual(mixer.map((track) => ({ ...track, pan: 0 })));
     expect(migrated.history.master).toEqual(defaultMasterMix());
