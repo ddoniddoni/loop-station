@@ -7,6 +7,7 @@ import type { ProjectSummary } from "@/audio/storage/project-catalog";
 import { useAudioSessionContext, useProjectManager, useStationController } from "@/components/audio/audio-engine-provider";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ProjectEditor } from "./project-editor";
+import { ProjectDuplicate } from "./project-duplicate";
 import { currentProjectStatus } from "./loop-save-label";
 import { useStudioView } from "./studio-view-provider";
 
@@ -36,7 +37,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
         <div><dt>템포·박자</dt><dd>{project.transport.bpm} BPM · {project.transport.numerator}/{project.transport.denominator}</dd></div>
         <div><dt>마지막 수정</dt><dd>{project.updatedAtLabel}</dd></div>
       </dl>
-      <Flex gap="2" wrap="wrap"><Button disabled={disabled} title={!active ? station.projectChangeReason ?? undefined : undefined} onClick={() => void open()}>{active ? "작업 이어하기" : "프로젝트 열기"}</Button><ProjectEditor project={project} /></Flex>
+      <Flex gap="2" wrap="wrap"><Button disabled={disabled} title={!active ? station.projectChangeReason ?? undefined : undefined} onClick={() => void open()}>{active ? "작업 이어하기" : "프로젝트 열기"}</Button><ProjectEditor project={project} /><ProjectDuplicate project={project} /></Flex>
       {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
     </div>
   </article>;
@@ -66,6 +67,6 @@ export function MyProjects() {
     </div>}
     {current.save.issue && state.phase === "ready" && <Text as="p" role="status" size="2" mt="3">{current.save.issue}</Text>}
     <div className="station-project-list">{state.projects.map((project) => <ProjectCard key={project.id} project={project} />)}</div>
-    <Text as="p" size="2" color="gray" mt="5">프로젝트는 이 브라우저에 저장됩니다. 브라우저 데이터 삭제 시 사라지며, 파일 백업·복제·삭제는 아직 지원하지 않습니다.</Text>
+    <Text as="p" size="2" color="gray" mt="5">복제본도 이 브라우저에 저장되며 외부 백업을 대신하지 않습니다. 브라우저 데이터 삭제 시 원본과 사본이 함께 사라집니다. 파일 백업·휴지통과 삭제는 아직 준비 중입니다.</Text>
   </section>;
 }

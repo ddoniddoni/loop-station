@@ -5,7 +5,7 @@ import type { SavedStationSession } from "./station-session";
 
 const SELECTION = "loop-station-active-project";
 export const PROJECT_CHANNEL = "loop-station-project-catalog";
-type ProjectOperation = "create" | "open" | "rename" | null;
+type ProjectOperation = "create" | "open" | "rename" | "duplicate" | null;
 export type ProjectManagerSnapshot = {
   phase: "loading" | "ready" | "error"; projects: readonly ProjectSummary[];
   activeId: string; operation: ProjectOperation; issue: string | null; selectionIssue: string | null;
@@ -113,13 +113,15 @@ export class ProjectManager {
     if (reason) { this.update({ issue: reason }); return false; }
     return true;
   }
-  private async change(operation: "create" | "open", stopAudio: () => Promise<boolean>,
+  private async change(operation: "create" | "open" | "duplicate", stopAudio: () => Promise<boolean>,
     prepare: () => Promise<{ id: string; saved: SavedStationSession }>): Promise<boolean> {
     if (!this.canChange() || !this.station.beginProjectChange()) return false;
     this.update({ operation, issue: null });
+    let prepared = false;
     try {
       if (!await stopAudio()) throw new Error("오디오 종료에 실패했습니다. 상단 AUDIO에서 종료를 재시도한 뒤 다시 여세요.");
       const { id, saved } = await prepare();
+      prepared = true;
       this.stopStorage?.(); this.stopStorage = null;
       this.station.adoptProject(new ProjectRepository(id), saved);
       this.bindStorage();
@@ -128,10 +130,13 @@ export class ProjectManager {
       this.announce();
       return true;
     } catch (error) {
-      this.update({ issue: message(error) });
+      if (operation === "duplicate" && prepared) this.announce();
+      this.update({ issue: operation === "duplicate" && prepared
+        ? `사본은 저장됐지만 스튜디오를 전환하지 못했습니다. 목록에서 사본을 다시 여세요. ${message(error)}` : message(error) });
       return false;
     } finally {
       this.station.cancelProjectChange();
+      this.bindStorage();
       this.update({ operation: null });
       await this.refresh();
     }
@@ -140,6 +145,12 @@ export class ProjectManager {
     return this.change("create", stopAudio, async () => {
       const { project, saved } = await this.catalog.create(title, config);
       return { id: project.id, saved };
+    });
+  }
+  duplicate(project: ProjectSummary, title: string, stopAudio: () => Promise<boolean>): Promise<boolean> {
+    return this.change("duplicate", stopAudio, async () => {
+      const copied = await this.catalog.duplicate(project, title, this.station.retainedBytes);
+      return { id: copied.project.id, saved: copied.saved };
     });
   }
   open(id: string, stopAudio: () => Promise<boolean>): Promise<boolean> {

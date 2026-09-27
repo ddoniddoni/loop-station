@@ -75,6 +75,7 @@ export class StationController {
     return () => { this.listeners.delete(listener); };
   };
   get locked(): boolean { return this.snapshot.locked; }
+  get retainedBytes(): number { return this.tracks.reduce((sum, track) => sum + track.retainedBytes, 0); }
   get dirty(): boolean { return this.mixerDirty || this.persistence.dirty || this.tracks.some((track) => track.performing); }
   initializeStorage(): Promise<void> { return this.persistence.initialize(); }
   listenForStorageChanges(): () => void { return this.persistence.listen(); }

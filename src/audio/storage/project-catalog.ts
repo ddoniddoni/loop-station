@@ -1,6 +1,7 @@
 import { defaultMasterMix, defaultStationMix } from "../loop/track-mixer";
 import { isTransportConfig, type TransportConfig } from "../transport/audio-frame-clock";
 import { openLoopDatabase } from "./loop-database";
+import { checkDuplicateCapacity } from "./project-duplication";
 import { LoopStorageError, type SessionRepository } from "./loop-session";
 import { createStationSession, decodeStationSession, emptyStationHistory, projectTransport, type SavedStationSession, type StationProject } from "./station-session";
 
@@ -60,7 +61,7 @@ async function readProject(id: string): Promise<{ head: unknown; audio: unknown;
 }
 
 /** Metadata and PCM commit atomically; asynchronous hashes finish before opening a transaction. */
-async function commit(id: string, saved: SavedStationSession, expected: string | null, title?: string): Promise<ProjectSummary> {
+async function commit(id: string, saved: SavedStationSession, expected: string | null, title?: string, source?: ProjectSummary): Promise<ProjectSummary> {
   const db = await openLoopDatabase();
   try {
     return await new Promise((resolve, reject) => {
@@ -68,12 +69,20 @@ async function commit(id: string, saved: SavedStationSession, expected: string |
       const heads = tx.objectStore("heads");
       const head = heads.get(id);
       const meta = heads.get(PREFIX + id);
+      const sourceHead = source ? heads.get(source.id) : null;
+      const sourceMeta = source ? heads.get(PREFIX + source.id) : null;
       let result: ProjectRecord;
       let failure: unknown;
-      meta.onsuccess = () => {
+      (sourceMeta ?? meta).onsuccess = () => {
         try {
           if ((head.result ?? null) !== expected) throw conflict();
           const previous = meta.result === undefined ? undefined : record(meta.result);
+          if (expected === null && previous) throw conflict();
+          if (source && sourceHead && sourceMeta) {
+            const current = record(sourceMeta.result);
+            if (current.id !== source.id || current.revision !== source.revision
+              || current.audioRevision !== source.audioRevision || sourceHead.result !== source.audioRevision) throw conflict();
+          }
           if (!previous && id !== LEGACY_PROJECT_ID && expected !== null) throw conflict();
           result = describe(id, previous?.title ?? title ?? "로컬 프로젝트", saved, previous);
           tx.objectStore("sessions").put(saved, id);
@@ -167,6 +176,21 @@ export class ProjectCatalog {
     const saved = await createStationSession({ tracks: emptyStationHistory(), mixer: defaultStationMix(), master: defaultMasterMix(), transport });
     const id = `loop-${crypto.randomUUID()}`;
     return { project: await commit(id, saved, null, title), saved };
+  }
+  async duplicate(source: ProjectSummary, title: string, retainedBytes: number): Promise<{ project: ProjectSummary; saved: SavedStationSession }> {
+    title = projectTitle(title);
+    if (!isProjectId(source.id)) throw new Error("프로젝트 ID가 올바르지 않습니다.");
+    const stored = await readProject(source.id);
+    const current = record(stored.meta);
+    if (current.id !== source.id || current.revision !== source.revision || current.audioRevision !== source.audioRevision
+      || stored.head !== source.audioRevision) throw conflict();
+    const original = await decodeStationSession(stored.audio);
+    if (original.revision !== stored.head) throw new LoopStorageError("corrupt", "원본 프로젝트의 저장 리비전이 일치하지 않습니다. 복제하지 않았습니다.");
+    await checkDuplicateCapacity(original.history, retainedBytes);
+    const saved = await createStationSession(original.history);
+    const id = `loop-${crypto.randomUUID()}`;
+    // Recheck BOTH source revisions in the write transaction after async work.
+    return { project: await commit(id, saved, null, title, source), saved };
   }
   async rename(project: ProjectSummary, title: string): Promise<ProjectSummary> {
     title = projectTitle(title);

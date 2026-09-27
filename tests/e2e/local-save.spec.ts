@@ -177,3 +177,60 @@ test("creating and opening another project preserves the previous PCM and requir
   await expect(page.getByRole("button", { name: "반복 재생", exact: true })).toBeDisabled();
   expect(await storedFingerprint(page)).toEqual(before);
 });
+
+async function savedProjectFingerprint(page: Page, id: string) {
+  return page.evaluate(async (key) => {
+    const saved = await new Promise<SavedStationSession>((resolve, reject) => {
+      const open = indexedDB.open("loop-station-local", 1);
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction("sessions", "readonly");
+        const read = tx.objectStore("sessions").get(key);
+        tx.oncomplete = () => { db.close(); resolve(read.result as SavedStationSession); };
+        tx.onabort = () => { db.close(); reject(tx.error); };
+      };
+    });
+    const tracks = await Promise.all(saved.history.tracks.map(async (track) => {
+      const slots = [track.current, track.undo, track.redo, track.cleared?.current, track.cleared?.undo, track.cleared?.redo];
+      return Promise.all(slots.map(async (take) => take ? {
+        metadata: take.metadata, hash: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", take.pcm))),
+      } : null));
+    }));
+    return { revision: saved.revision, checksum: saved.checksum, tracks, mixer: saved.history.mixer, master: saved.history.master, transport: saved.history.transport };
+  }, id);
+}
+
+test("duplicates real recorded PCM and recovery history independently without restarting audio", async ({ page }) => {
+  await recordLoop(page, 1);
+  const first = page.locator('[data-track="01"]');
+  await first.getByRole("button", { name: "오버더빙 · 1회", exact: true }).click();
+  await expect(first.locator(".station-track-state")).toHaveText("OVERDUB", { timeout: 6000 });
+  await expect(first.locator(".station-track-state")).toHaveText("PLAYING", { timeout: 6000 });
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  await first.getByRole("button", { name: "비우기", exact: true }).click();
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  const before = await savedProjectFingerprint(page, "track-01-session");
+  expect(before.tracks[0][3]).not.toBeNull();
+  expect(before.tracks[0][4]).not.toBeNull();
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await page.getByRole("button", { name: "로컬 프로젝트 복제", exact: true }).click();
+  await page.getByRole("button", { name: "복제하고 스튜디오 열기", exact: true }).click();
+  await expect(page.locator(".station-project-name")).toHaveText("로컬 프로젝트 사본");
+  await expect(page.getByRole("button", { name: "마이크 연결", exact: true })).toBeVisible();
+  const id = await page.evaluate(() => sessionStorage.getItem("loop-station-active-project"));
+  expect(id).not.toBe("track-01-session");
+  const copied = await savedProjectFingerprint(page, id!);
+  expect(copied.revision).not.toBe(before.revision);
+  expect({ ...copied, revision: before.revision }).toEqual(before);
+  await first.getByRole("button", { name: "1번 트랙 비운 루프 복구", exact: true }).click();
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  expect(await savedProjectFingerprint(page, "track-01-session")).toEqual(before);
+  const editedCopy = await savedProjectFingerprint(page, id!);
+  expect(editedCopy.tracks[0][0]).toEqual(before.tracks[0][3]);
+  expect(editedCopy.tracks[0][1]).toEqual(before.tracks[0][4]);
+  await page.reload();
+  await expect(page.locator(".station-project-name")).toHaveText("로컬 프로젝트 사본");
+  await expect(first.getByRole("button", { name: "반복 재생", exact: true })).toBeDisabled();
+  expect(await savedProjectFingerprint(page, id!)).toEqual(editedCopy);
+});

@@ -152,3 +152,76 @@ test("stale rename drafts cannot overwrite a newer name from another tab", async
   await expect(other.getByRole("article", { name: "먼저 저장한 이름", exact: true })).toBeVisible();
   await other.close();
 });
+
+test("copies an empty project's tempo into a separate ID and restores the copy selection", async ({ page }) => {
+  await createProject(page, "원본", 90);
+  const original = await page.evaluate(() => sessionStorage.getItem("loop-station-active-project"));
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await page.getByRole("button", { name: "원본 복제", exact: true }).click();
+  await expect(page.getByRole("dialog").getByLabel("사본 이름")).toHaveValue("원본 사본");
+  await page.getByRole("button", { name: "복제하고 스튜디오 열기", exact: true }).click();
+  await expect(page.locator(".station-project-name")).toHaveText("원본 사본");
+  expect(await page.evaluate(() => sessionStorage.getItem("loop-station-active-project"))).not.toBe(original);
+  await page.reload();
+  await expect(page.locator(".station-project-name")).toHaveText("원본 사본");
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await expect(page.getByRole("article")).toHaveCount(2);
+  for (const title of ["원본", "원본 사본"]) await expect(page.getByRole("article", { name: title, exact: true }).getByText("90 BPM · 4/4", { exact: true })).toBeVisible();
+});
+
+test("a failed duplicate metadata write rolls back all new keys and preserves source selection", async ({ page }) => {
+  await createProject(page, "유지할 원본");
+  const before = await storedKeys(page);
+  const active = await page.evaluate(() => sessionStorage.getItem("loop-station-active-project"));
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await page.getByRole("button", { name: "유지할 원본 복제", exact: true }).click();
+  await page.evaluate(() => {
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (value: unknown, key?: IDBValidKey) {
+      if (this.name === "heads" && typeof key === "string" && key.startsWith("project:")) {
+        IDBObjectStore.prototype.put = put;
+        throw new DOMException("Synthetic duplicate failure", "QuotaExceededError");
+      }
+      return put.call(this, value, key);
+    };
+  });
+  await page.getByRole("button", { name: "복제하고 스튜디오 열기", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("저장 공간");
+  expect(await storedKeys(page)).toEqual(before);
+  expect(await page.evaluate(() => sessionStorage.getItem("loop-station-active-project"))).toBe(active);
+});
+
+test("rechecks the source revision after the asynchronous capacity check", async ({ page }) => {
+  await createProject(page, "변경될 원본");
+  const before = await storedKeys(page);
+  await page.getByRole("link", { name: "내 프로젝트", exact: true }).click();
+  await page.getByRole("button", { name: "변경될 원본 복제", exact: true }).click();
+  await page.evaluate(() => {
+    const estimate = navigator.storage.estimate.bind(navigator.storage);
+    navigator.storage.estimate = async () => {
+      navigator.storage.estimate = estimate;
+      const id = sessionStorage.getItem("loop-station-active-project")!;
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const open = indexedDB.open("loop-station-local", 1);
+        open.onsuccess = () => resolve(open.result);
+        open.onerror = () => reject(open.error);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction("heads", "readwrite");
+          const store = tx.objectStore("heads");
+          const read = store.get(`project:${id}`);
+          read.onsuccess = () => { store.put({ ...read.result, title: "먼저 변경한 이름", revision: crypto.randomUUID() }, `project:${id}`); };
+          tx.oncomplete = () => resolve();
+          tx.onabort = () => reject(tx.error);
+        });
+      } finally { db.close(); }
+      return estimate();
+    };
+  });
+  await page.getByRole("button", { name: "복제하고 스튜디오 열기", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("다른 탭에서 프로젝트가 변경");
+  expect(await storedKeys(page)).toEqual(before);
+  await page.getByRole("dialog").getByRole("button", { name: "취소", exact: true }).click();
+  await expect(page.getByRole("article", { name: "먼저 변경한 이름", exact: true })).toBeVisible();
+});

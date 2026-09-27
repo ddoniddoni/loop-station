@@ -115,6 +115,63 @@ describe("safe project transitions", () => {
     expect(manager.getSnapshot().phase).toBe("ready");
     expect(fresh.getSnapshot().config).toEqual(station.getSnapshot().config);
   });
+  it("locks edits and waits for duplication to commit before selecting the independent copy", async () => {
+    const { manager, station, catalog, projects, other, original } = await fixture();
+    let finish!: () => void;
+    const duplicate = vi.spyOn(catalog, "duplicate").mockImplementation(() => new Promise((resolve) => {
+      finish = () => { projects.set(otherId, other); resolve({ project: summary(otherId, other), saved: other }); };
+    }));
+    const source = manager.getSnapshot().projects.find((item) => item.id === LEGACY_PROJECT_ID)!;
+    const stop = vi.fn(async () => true);
+    const pending = manager.duplicate(source, "사본", stop);
+    await Promise.resolve();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(manager.getSnapshot().operation).toBe("duplicate");
+    expect(station.projectChanging).toBe(true);
+    expect(manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(await manager.duplicate(source, "두 번째 사본", stop)).toBe(false);
+    expect(duplicate).toHaveBeenCalledExactlyOnceWith(source, "사본", 0);
+    finish();
+    expect(await pending).toBe(true);
+    expect(manager.getSnapshot().activeId).toBe(otherId);
+    expect(station.projectChanging).toBe(false);
+    expect(station.getSnapshot().config?.bpm).toBe(90);
+    expect(projects.get(LEGACY_PROJECT_ID)).toBe(original);
+    expect(station.tracks.every((track) => !track.getSnapshot().connected)).toBe(true);
+  });
+  it("keeps the current project and unlocks editing when duplication fails", async () => {
+    const { manager, station, catalog, original } = await fixture();
+    vi.spyOn(catalog, "duplicate").mockRejectedValue(new DOMException("full", "QuotaExceededError"));
+    const source = manager.getSnapshot().projects[0];
+    expect(await manager.duplicate(source, "사본", async () => true)).toBe(false);
+    expect(manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(manager.getSnapshot().issue).toContain("저장 공간");
+    expect(station.getSnapshot().save.savedAt).toBe(original.updatedAt);
+    expect(station.projectChanging).toBe(false);
+  });
+  it("does not start duplication when audio cannot close or current edits are unsaved", async () => {
+    const { manager, station, catalog } = await fixture();
+    const duplicate = vi.spyOn(catalog, "duplicate");
+    const source = manager.getSnapshot().projects[0];
+    expect(await manager.duplicate(source, "사본", async () => false)).toBe(false);
+    vi.spyOn(ProjectRepository.prototype, "save").mockRejectedValue(new DOMException("full", "QuotaExceededError"));
+    station.configureProject(config);
+    await station.retryStorage();
+    const stop = vi.fn(async () => true);
+    expect(await manager.duplicate(source, "사본", stop)).toBe(false);
+    expect(stop).not.toHaveBeenCalled();
+    expect(duplicate).not.toHaveBeenCalled();
+    expect(station.dirty).toBe(true);
+  });
+  it("distinguishes a committed copy from a subsequent activation failure", async () => {
+    const { manager, station, catalog, other } = await fixture();
+    vi.spyOn(catalog, "duplicate").mockResolvedValue({ project: summary(otherId, other), saved: other });
+    vi.spyOn(station, "adoptProject").mockImplementation(() => { throw new Error("다른 탭의 변경을 확인하세요."); });
+    expect(await manager.duplicate(manager.getSnapshot().projects[0], "사본", async () => true)).toBe(false);
+    expect(manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(manager.getSnapshot().issue).toContain("사본은 저장됐지만");
+    expect(station.projectChanging).toBe(false);
+  });
 });
 
 describe("project names", () => {
