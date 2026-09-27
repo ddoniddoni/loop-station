@@ -5,6 +5,9 @@ import { StudioTheme } from "@/components/ui/studio-theme";
 import { ko } from "@/lib/i18n/ko";
 import "@radix-ui/themes/styles.css";
 import "./globals.css";
+import { AudioEngineProvider } from "@/components/audio/audio-engine-provider";
+import { StudioViewProvider } from "@/components/studio/studio-view-provider";
+import { StudioShell } from "@/components/studio/studio-shell";
 
 const pretendard = localFont({
   src: "./fonts/PretendardVariable.woff2",
@@ -27,7 +30,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ko" className={`${pretendard.variable} ${geist.variable} ${jetbrains.variable}`}>
       <body>
-        <StudioTheme>{children}</StudioTheme>
+        <StudioTheme><AudioEngineProvider><StudioViewProvider><StudioShell>{children}</StudioShell></StudioViewProvider></AudioEngineProvider></StudioTheme>
       </body>
     </html>
   );

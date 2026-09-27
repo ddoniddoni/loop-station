@@ -88,13 +88,13 @@ test("recording and cleared-loop recovery keep Tap and tempo settings locked", a
   await page.getByRole("button", { name: ko.transportApply, exact: true }).click();
   await expect(page.getByText("적용됨 · 240 BPM · 4/4", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  const settings = page.getByRole("button", { name: "Settings", exact: true });
+  const settings = page.getByRole("button", { name: "입력·트랙 설정", exact: true });
   if (await settings.isVisible()) await settings.click();
   await page.getByRole("button", { name: "입력 설정", exact: true }).click();
   await page.getByRole("button", { name: "마이크 사용 허용", exact: true }).click();
   await expect(page.getByText(ko.microphoneActive, { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "입력 설정 닫기" }).click();
-  const loops = page.getByRole("button", { name: "Loops", exact: true });
+  const loops = page.getByRole("button", { name: "트랙", exact: true });
   if (await loops.isVisible()) await loops.click();
   const track = page.locator('[data-track="01"]');
   await track.getByRole("button", { name: /RECORD 4 BARS/ }).click();

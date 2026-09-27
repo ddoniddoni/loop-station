@@ -7,3 +7,9 @@ const labels: Record<LoopSaveState["phase"], string> = {
 export function saveStatusLabel(save: LoopSaveState): string {
   return save.phase === "error" && save.editLocked ? "불러오기 실패" : labels[save.phase];
 }
+
+export function currentProjectStatus(save: LoopSaveState, performing: boolean, mixerDirty: boolean): string {
+  if (performing) return "녹음·편집 중";
+  if (mixerDirty) return "변경 저장 대기";
+  return saveStatusLabel(save);
+}

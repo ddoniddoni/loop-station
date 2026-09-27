@@ -69,7 +69,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
   }
 
   async function startAudio(): Promise<void> {
-    if (engineRef.current || closingRef.current) return;
+    if (engineRef.current || closingRef.current || loop.projectChanging || loop.getSnapshot().save.editLocked) return;
     const operation = ++operationRef.current;
     setIssue(null);
     setPhase("starting");
@@ -124,10 +124,11 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
     }
   }
 
-  async function stopAudio(): Promise<void> {
+  async function stopAudio(): Promise<boolean> {
     const engine = engineRef.current;
-    if (!engine) return;
+    if (!engine) return true;
     await closeAudio(engine);
+    return engineRef.current === null;
   }
 
   async function resumeAudio(): Promise<void> {

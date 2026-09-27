@@ -1,7 +1,7 @@
 import { createLoopSession, decodeLoopSession, LoopStorageError, type SessionRepository, type StoredSession, type SavedLoopSession } from "./loop-session";
 import type { LoopHistoryState } from "../loop/loop-history";
 
-const DATABASE = "loop-station-local";
+import { openLoopDatabase } from "./loop-database";
 const KEY = "track-01-session";
 
 /** Bounded single-session wrapper. Head and PCM commit in one transaction. */
@@ -11,32 +11,9 @@ export class IndexedDbSessionRepository<State, Session extends StoredSession<Sta
     decode(value: unknown): Promise<Session>;
   }) {}
 
-  private open(): Promise<IDBDatabase> {
-    return new Promise((resolve, reject) => {
-      if (!globalThis.indexedDB) { reject(new LoopStorageError("unavailable", "이 브라우저에서는 로컬 저장소를 사용할 수 없습니다.")); return; }
-      const request = indexedDB.open(DATABASE, 1);
-      let cancelled = false;
-      request.onblocked = () => {
-        cancelled = true;
-        reject(new LoopStorageError("blocked", "다른 탭이 저장소 변경을 막고 있습니다. 다른 탭을 닫은 뒤 재시도하세요."));
-      };
-      request.onupgradeneeded = () => {
-        if (cancelled) { request.transaction?.abort(); return; }
-        request.result.createObjectStore("heads");
-        request.result.createObjectStore("sessions");
-      };
-      request.onerror = () => reject(request.error ?? new Error("저장소를 열지 못했습니다."));
-      request.onsuccess = () => {
-        const db = request.result;
-        db.onversionchange = () => db.close();
-        if (cancelled) db.close();
-        else resolve(db);
-      };
-    });
-  }
 
   async load(): Promise<Session | null> {
-    const db = await this.open();
+    const db = await openLoopDatabase();
     try {
       const stored = await new Promise<{ head: unknown; session: unknown }>((resolve, reject) => {
         const tx = db.transaction(["heads", "sessions"], "readonly");
@@ -58,7 +35,7 @@ export class IndexedDbSessionRepository<State, Session extends StoredSession<Sta
   }
 
   private async commit(session: Session, expectedRevision: string | null): Promise<Session> {
-    const db = await this.open();
+    const db = await openLoopDatabase();
     try {
       await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(["heads", "sessions"], "readwrite");

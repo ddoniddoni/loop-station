@@ -13,6 +13,7 @@ export class LoopStorageError extends Error {
 }
 export type StoredSession<State> = { revision: string; updatedAt: number; history: State };
 export interface SessionRepository<State> {
+  readonly scope?: string;
   load(): Promise<StoredSession<State> | null>;
   save(history: State, expectedRevision: string | null): Promise<StoredSession<State>>;
 }

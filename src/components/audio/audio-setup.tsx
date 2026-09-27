@@ -18,10 +18,12 @@ const phaseStatus: Record<AudioPhase, string> = {
 
 function AudioPrimaryAction() {
   const audio = useAudioSessionContext();
+  const station = useStationController();
+  const project = useSyncExternalStore(station.subscribe, station.getSnapshot, station.getServerSnapshot);
   switch (audio.phase) {
     case "idle":
     case "error":
-      return <Button onClick={() => void audio.startAudio()}><StudioIcon name="power" />{audio.phase === "error" ? ko.audioRetry : ko.audioStart}</Button>;
+      return <Button disabled={project.save.editLocked} title={project.save.editLocked ? "프로젝트 저장 상태를 먼저 확인하세요." : undefined} onClick={() => void audio.startAudio()}><StudioIcon name="power" />{audio.phase === "error" ? ko.audioRetry : ko.audioStart}</Button>;
     case "ready": return <Button onClick={audio.startTone}>{ko.toneStart}</Button>;
     case "playing": return <Button variant="soft" onClick={audio.stopTone}>{ko.toneStop}</Button>;
     case "suspended": return <Button onClick={() => void audio.resumeAudio()}>{ko.audioResume}</Button>;

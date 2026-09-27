@@ -224,6 +224,7 @@ export class TestToneEngine {
   configureTransport(config: TransportConfig): void {
     if (!this.isReady || this.context.state !== "running" || this.loop.locked) return;
     this.node?.port.postMessage({ type: "transport-configure", config });
+    this.loop.configureProject(config);
   }
 
   setMetronomeEnabled(enabled: boolean): void {

@@ -6,7 +6,8 @@ import { EnvironmentDiagnostics } from "@/components/audio/environment-diagnosti
 import { StudioInputPanel } from "@/components/studio/studio-input-panel";
 import { MixerConsole } from "@/components/studio/mixer-console";
 import { RecordedClipDetails, RecordingTrack } from "@/components/studio/recording-track";
-import { StudioMobileNavigation, type StudioView } from "@/components/studio/studio-navigation";
+import { StudioMobileNavigation } from "@/components/studio/studio-navigation";
+import { useStudioView } from "./studio-view-provider";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ko } from "@/lib/i18n/ko";
 
@@ -21,24 +22,6 @@ const trackSlots = [
   { number: "08", name: "Texture", tone: "muted" },
 ] as const;
 type TrackSlot = (typeof trackSlots)[number];
-
-function LibraryPanel() {
-  return (
-    <aside id="library" tabIndex={-1} className="station-library" aria-labelledby="library-title">
-      <div className="station-library-head">
-        <Heading as="h2" id="library-title" size="4"><StudioIcon name="folder" />Library Browser</Heading>
-        <Text as="p" size="2" color="gray">내 사운드 라이브러리</Text>
-      </div>
-      <div className="station-library-tabs" aria-label="라이브러리 유형"><span className="is-current">Loops</span><span>Samples</span><span>Presets</span><span>Files</span></div>
-      <div className="station-library-content">
-        <div className="station-library-row"><StudioIcon name="folder" size={16} /><span>My Loops</span><small>0</small></div>
-        <div className="station-library-row"><StudioIcon name="folder" size={16} /><span>Imported Samples</span><small>0</small></div>
-        <div className="station-library-empty"><StudioIcon name="upload" size={24} /><Text as="p" size="2">{ko.studioLibraryEmpty}</Text><Text as="p" size="1" color="gray">샘플 가져오기 준비 중</Text></div>
-      </div>
-      <div className="station-library-foot"><Button type="button" variant="outline" color="gray" disabled aria-describedby="availability"><StudioIcon name="upload" size={16} />Import Sample</Button><Text as="p" size="1" color="gray">로컬 라이브러리 · 준비 중</Text></div>
-    </aside>
-  );
-}
 
 function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: TrackSlot; onSelect: (slot: TrackSlot) => void; bank: number; onBankChange: (bank: number) => void }) {
   return (
@@ -66,7 +49,6 @@ function InspectorPanel({ selected }: { selected: TrackSlot }) {
         <div className="station-fx-slot"><StudioIcon name="wave" /><div><Text as="p" size="2">이펙트 없음</Text><Text as="p" size="1" color="gray">{ko.studioFxUnavailable}</Text></div></div>
       </section>
       <details className="station-inspector-section station-diagnostics"><summary>{ko.diagnosticsTitle}<StudioIcon name="chevron" size={14} /></summary><EnvironmentDiagnostics /></details>
-      <section id="project" tabIndex={-1} className="station-inspector-section station-project" aria-labelledby="project-title"><Heading as="h3" id="project-title" size="2">PROJECT</Heading><Text as="p" size="1" color="gray">{ko.studioProjectDescription}</Text><div className="station-project-actions"><Button variant="outline" color="gray" disabled aria-describedby="availability">{ko.newProject}</Button><Button variant="outline" color="gray" disabled aria-describedby="availability">{ko.demo}</Button></div></section>
     </aside>
   );
 }
@@ -74,12 +56,12 @@ function InspectorPanel({ selected }: { selected: TrackSlot }) {
 export function StudioWorkspace() {
   const [selected, setSelected] = useState<TrackSlot>(trackSlots[0]);
   const [bank, setBank] = useState(0);
-  const [view, setView] = useState<StudioView>("tracks");
+  const { view } = useStudioView();
   return (
     <div className="station-studio" data-view={view}>
-      <div className="station-workspace"><LibraryPanel /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
+      <div className="station-workspace"><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
       <MixerConsole bank={bank} onBankChange={setBank} slots={trackSlots} />
-      <StudioMobileNavigation view={view} onNavigate={setView} />
+      <StudioMobileNavigation />
     </div>
   );
 }

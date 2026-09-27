@@ -1,5 +1,5 @@
 import type { LoopHistoryState } from "../loop/loop-history";
-import { LoopStorageError, type SessionRepository } from "./loop-session";
+import { LoopStorageError, type SessionRepository, type StoredSession } from "./loop-session";
 
 export type LoopSaveState = {
   phase: "loading" | "empty" | "saving" | "saved" | "error" | "conflict" | "session";
@@ -30,16 +30,47 @@ export class LoopPersistence<State = LoopHistoryState> {
   private pending: State | null = null;
   private channel: BroadcastChannel | null = null;
   private externalChange = false;
+  private replacementState: LoopSaveState | null = null;
 
-  constructor(private readonly repository: SessionRepository<State> | null,
+  constructor(private repository: SessionRepository<State> | null,
     private readonly hydrate: (state: State) => void, private readonly notify: () => void) {
     this.state = repository ? initialSaveState : { ...initialSaveState, phase: "session", editLocked: false };
   }
   get snapshot(): LoopSaveState { return this.state; }
   get dirty(): boolean { return this.unsaved; }
 
+  failInitialization(error: unknown): void {
+    if (!this.initialized && !this.replacing) this.set({ phase: "error", issue: errorMessage(error), editLocked: true, canRetry: true });
+  }
+  get replacing(): boolean { return this.replacementState !== null; }
+  beginReplacement(initial = false): boolean {
+    const allowed = ["loading", "empty", "saved"].includes(this.state.phase) || (initial && !this.initialized && this.state.phase === "error");
+    if (this.replacing || this.operation || this.unsaved || !allowed) return false;
+    this.replacementState = this.state;
+    this.set({ editLocked: true });
+    return true;
+  }
+  cancelReplacement(): void {
+    if (!this.replacementState) return;
+    this.state = this.replacementState;
+    this.replacementState = null;
+    if (this.externalChange) this.conflict();
+    else this.notify();
+  }
+  adopt(repository: SessionRepository<State>, saved: StoredSession<State> | null, empty: State): void {
+    if (!this.replacing || this.operation || this.unsaved) throw new Error("진행 중인 작업을 먼저 저장해야 합니다.");
+    this.repository = repository;
+    this.revision = saved?.revision ?? null;
+    this.pending = null;
+    this.externalChange = false;
+    this.initialized = true;
+    this.hydrate(saved?.history ?? empty);
+    this.replacementState = null;
+    this.set({ phase: saved ? "saved" : "empty", savedAt: saved?.updatedAt ?? null, editLocked: false, issue: null, canRetry: false });
+  }
+
   initialize(): Promise<void> {
-    if (!this.repository || this.state.phase === "session" || this.initialized) return Promise.resolve();
+    if (this.replacing || !this.repository || this.state.phase === "session" || this.initialized) return Promise.resolve();
     if (this.operation) return this.operation;
     this.operation = this.load().finally(() => { this.operation = null; });
     return this.operation;
@@ -67,6 +98,7 @@ export class LoopPersistence<State = LoopHistoryState> {
     void this.flush();
   }
   retry(): Promise<void> {
+    if (this.replacing) return Promise.resolve();
     if (this.operation) return this.operation;
     if (!this.initialized) { this.externalChange = false; return this.initialize(); }
     return this.flush();
@@ -96,13 +128,13 @@ export class LoopPersistence<State = LoopHistoryState> {
   }
 
   useSessionOnly(): void {
-    if (this.operation || (this.state.phase !== "error" && this.state.phase !== "conflict")) return;
+    if (this.replacing || this.operation || (this.state.phase !== "error" && this.state.phase !== "conflict")) return;
     this.set({ phase: "session", issue: "이 탭의 변경은 저장하지 않습니다. 새로고침하면 마지막 저장본으로 돌아갑니다.", editLocked: false, canRetry: false });
   }
   listen(): () => void {
     if (!this.repository || typeof BroadcastChannel === "undefined") return () => {};
     let channel: BroadcastChannel;
-    try { channel = new BroadcastChannel(CHANNEL); }
+    try { channel = new BroadcastChannel(!this.repository.scope || this.repository.scope === "track-01-session" ? CHANNEL : `${CHANNEL}:${this.repository.scope}`); }
     catch { return () => {}; }
     this.channel = channel;
     channel.onmessage = (event: MessageEvent<unknown>) => {
@@ -123,7 +155,7 @@ export class LoopPersistence<State = LoopHistoryState> {
   }
   private set(patch: Partial<LoopSaveState>): void {
     const savedAtLabel = patch.savedAt === undefined ? this.state.savedAtLabel
-      : patch.savedAt === null ? null : new Date(patch.savedAt).toLocaleTimeString("ko-KR");
+      : patch.savedAt === null ? null : new Date(patch.savedAt).toLocaleString("ko-KR");
     this.state = { ...this.state, ...patch, savedAtLabel };
     this.notify();
   }
