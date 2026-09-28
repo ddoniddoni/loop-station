@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DEFAULT_OUTPUT_VOLUME, isOutputVolume } from "@/audio/engine/output-volume";
 import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine";
 import type { MicrophoneController } from "@/audio/input/microphone-controller";
 import type { StationController } from "@/audio/loop/station-controller";
@@ -22,6 +23,9 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
   const engineRef = useRef<TestToneEngine | null>(null);
   const closingRef = useRef<TestToneEngine | null>(null);
   const operationRef = useRef(0);
+  const outputSettings = useRef({ volume: DEFAULT_OUTPUT_VOLUME, muted: false });
+  const [outputVolume, setOutputVolume] = useState(DEFAULT_OUTPUT_VOLUME);
+  const [outputMuted, setOutputMuted] = useState(false);
   const [phase, setPhase] = useState<AudioPhase>("idle");
   const [sampleRate, setSampleRate] = useState<number | null>(null);
   const [transport, setTransport] = useState<TransportSnapshot | null>(null);
@@ -114,6 +118,8 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
     }
 
     engineRef.current = engine;
+    engine.setOutputVolume(outputSettings.current.volume);
+    engine.setOutputMuted(outputSettings.current.muted);
     try {
       await engine.initialize();
       if (engineRef.current !== engine || operation !== operationRef.current) return;
@@ -148,8 +154,19 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
   }
 
   return {
-    phase, sampleRate, transport, metronomeEnabled, metronomeVolume, issue,
+    phase, sampleRate, transport, metronomeEnabled, metronomeVolume, outputVolume, outputMuted, issue,
     startAudio, stopAudio, resumeAudio,
+    setOutputVolume: (volume: number) => {
+      if (!isOutputVolume(volume)) return;
+      outputSettings.current.volume = volume;
+      engineRef.current?.setOutputVolume(volume);
+      setOutputVolume(volume);
+    },
+    setOutputMuted: (muted: boolean) => {
+      outputSettings.current.muted = muted;
+      engineRef.current?.setOutputMuted(muted);
+      setOutputMuted(muted);
+    },
     startTone: () => engineRef.current?.startTone(),
     stopTone: () => engineRef.current?.stopTone(),
     startTransport: () => engineRef.current?.startTransport(),

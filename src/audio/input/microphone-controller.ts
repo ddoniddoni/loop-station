@@ -41,8 +41,8 @@ export class MicrophoneController {
     return () => { this.listeners.delete(listener); };
   };
 
-  attachAudio(context: AudioContext, node: AudioWorkletNode): void {
-    this.bus = new MicrophoneInputBus(context, node);
+  attachAudio(context: AudioContext, node: AudioWorkletNode, output: AudioNode = context.destination): void {
+    this.bus = new MicrophoneInputBus(context, node, output);
     this.node = node;
     this.bus.setGain(this.snapshot.gainDb);
     this.update({ audioReady: context.state === "running", monitorEnabled: false });

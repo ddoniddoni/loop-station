@@ -11,7 +11,7 @@ export class MicrophoneInputBus {
   private readonly inputGain: GainNode;
   private readonly monitorGain: GainNode;
 
-  constructor(private readonly context: AudioContext, private readonly node: AudioWorkletNode) {
+  constructor(private readonly context: AudioContext, private readonly node: AudioWorkletNode, output: AudioNode = context.destination) {
     this.inputGain = context.createGain();
     this.inputGain.channelCount = 1;
     this.inputGain.channelCountMode = "explicit";
@@ -20,7 +20,7 @@ export class MicrophoneInputBus {
     this.monitorGain.gain.value = 0;
     this.inputGain.connect(node);
     node.connect(this.monitorGain, 2);
-    this.monitorGain.connect(context.destination);
+    this.monitorGain.connect(output);
   }
 
   connect(stream: MediaStream): void {

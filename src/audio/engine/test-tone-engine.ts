@@ -4,6 +4,8 @@ import type { MicrophoneController } from "../input/microphone-controller";
 import type { StationController } from "../loop/station-controller";
 import { AUDIO_STARTUP_TIMEOUT_MS, isWorkletReady } from "./worklet-protocol";
 
+import { DEFAULT_OUTPUT_VOLUME, isOutputVolume, OutputVolume } from "./output-volume";
+
 type EngineCallbacks = {
   onContextStateChange: (state: AudioContextState) => void;
   onToneStateChange: (playing: boolean) => void;
@@ -48,6 +50,9 @@ export class TestToneEngine {
   private toneGain: GainNode | null = null;
   private clickGain: GainNode | null = null;
   private loopGain: GainNode | null = null;
+  private output: OutputVolume | null = null;
+  private outputVolume = DEFAULT_OUTPUT_VOLUME;
+  private outputMuted = false;
   private disposed = false;
   private ready = false;
   private initialization: Promise<void> | null = null;
@@ -159,6 +164,8 @@ export class TestToneEngine {
       this.callbacks.onProcessorError();
     };
 
+    const output = new OutputVolume(this.context, this.outputVolume, this.outputMuted);
+    this.output = output;
     const toneGain = this.context.createGain();
     toneGain.gain.value = 0.15;
     const clickGain = this.context.createGain();
@@ -168,18 +175,18 @@ export class TestToneEngine {
     this.loopGain = this.context.createGain();
     this.loopGain.gain.value = 1; // Master gain and stereo output metering live in the Worklet.
     node.connect(this.loopGain, 3);
-    node.connect(this.context.destination, 4);
-    this.loopGain.connect(this.context.destination);
+    node.connect(output.input, 4);
+    this.loopGain.connect(output.input);
     node.connect(toneGain, 0);
     node.connect(clickGain, 1);
-    toneGain.connect(this.context.destination);
-    clickGain.connect(this.context.destination);
+    toneGain.connect(output.input);
+    clickGain.connect(output.input);
     // Connecting a node is not evidence that its process() has rendered a block.
     await new Promise<void>((resolve, reject) => { this.readyWaiter = { resolve, reject }; });
     this.readyWaiter = null;
     this.assertActive();
     if (this.context.state !== "running") throw new AudioSetupError("not-running");
-    this.input.attachAudio(this.context, node);
+    this.input.attachAudio(this.context, node, output.input);
     this.recording?.attach(this.context, node);
     this.loop.attach(this.context, node);
     this.context.addEventListener("statechange", this.handleContextStateChange);
@@ -245,6 +252,18 @@ export class TestToneEngine {
     this.clickGain.gain.setTargetAtTime(volume * 0.003, this.context.currentTime, 0.005);
   }
 
+  setOutputVolume(volume: number): void {
+    if (this.disposed || !isOutputVolume(volume)) return;
+    this.outputVolume = volume;
+    this.output?.setVolume(volume);
+  }
+
+  setOutputMuted(muted: boolean): void {
+    if (this.disposed) return;
+    this.outputMuted = muted;
+    this.output?.setMuted(muted);
+  }
+
   dispose(): Promise<void> {
     if (this.disposal) return this.disposal;
     // Keep one close promise until the browser has actually released the context.
@@ -280,6 +299,7 @@ export class TestToneEngine {
     this.toneGain?.disconnect();
     this.clickGain?.disconnect();
     this.loopGain?.disconnect();
+    this.output?.dispose(); this.output = null;
     this.node = null;
     this.toneGain = null;
     this.clickGain = null;

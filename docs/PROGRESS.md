@@ -19,6 +19,19 @@
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
 
+## 2026-09-28 — 전체 듣기 볼륨과 출력 증폭
+
+- 요구사항: `MIX-01`, 관련 `MIX-02`, `SYS-03`. 사용자의 “전체적으로 잘 안 들림” 요청으로 코드 프리셋보다 우선 반영. **구현 완료/미검증.**
+- 확인 근거: 기존 루프 마스터 기본 −6.0206dB(0.5), 멜로디 악기 버스 0.25, 드럼 0.5이며 루프/악기/클릭/마이크 모니터가 각기 destination으로 연결돼 공통 듣기 볼륨이 없었음. 사용자의 실제 청취 환경은 테스트 중단 방침에 따라 재현/측정하지 않았고, 이 값만으로 작은 소리의 단일 원인이라고 확정하지 않음.
+- Git: 깨끗한 `feature/phase-5-drum-instrument` / `7aa771c`에서 현재 악기의 듣기 기능 개선을 이어감. fetch 후 origin/develop `e569efc` 확인, 선행 악기 미통합 상태를 보존. merge/PR/배포 없음.
+- UI: 트랙/악기 화면 위 항상 보이는 Radix 전체 볼륨 슬라이더 0–400%/10% 단위, 기본 200%, 전체 음소거와 기본 200% 복귀. 모바일/키보드 조작 지원. 소리 시작 전에도 설정 가능, 녹음 중 변경 가능. 오디오 재시작은 같은 탭의 값 유지, 새로고침은 200%·음소거 OFF. 프로젝트 저장에는 포함하지 않음.
+- 그래프: 모든 재생 경로(루프 stereo, 악기 mono, 테스트 톤, 클릭, 명시적으로 활성화한 마이크 모니터) → stereo Gain → DynamicsCompressor → mute Gain → destination. gain 0–4, 기본 2(+6.02dB), 10ms 시정수로 조절. 음소거는 5ms 시정수. 기존 루프 마스터/트랙 믹서·PCM 기록/Undo/저장 경로는 변경하지 않음. 마이크 모니터 기본 OFF 유지.
+- 출력 압축: threshold −3dB, knee 3dB, ratio 20:1, attack 3ms, release 100ms. 브라우저 기본 컴프레서이며 모든 순간 피크의 하드 제한을 보장하지 않음. 압축/브라우저 look-ahead로 청취 음색·지연이 달라질 수 있으며 실제 청취/지연은 미검증. 기존 L/R 미터는 증폭/압축 전 루프 버스이므로 최종 전체 출력 미터가 아님. [DynamicsCompressorNode](https://developer.mozilla.org/en-US/docs/Web/API/DynamicsCompressorNode), [setTargetAtTime](https://developer.mozilla.org/en-US/docs/Web/API/AudioParam/setTargetAtTime) 참고.
+- 파일: `src/audio/engine/output-volume.ts`, test-tone-engine, microphone-controller/microphone-input-bus의 출력 목적지 인자, use-audio-session의 탭 설정·엔진 명령, `output-volume-controls.tsx`, page.tsx/globals.css, README/NEXT/PROGRESS, 단위/E2E 시나리오.
+- 작성한 검증: output-volume.test.ts 2개(스테레오 경로/증폭/독립 음소거/해제, 잘못된 값/0%), audio-engine.test.ts 공통 출력 경로 1개와 기존 fixture 보완, output-volume.spec.ts E2E 1개(시작 전 변경/음소거/재시작 유지/기본 복귀). **전부 미실행.** 실제 PCM 출력 진폭·마이크 모니터 OFF·최대 증폭의 압축/클리핑·저장 PCM 불변은 테스트 재개 후 검증한다.
+- 실제 검사: `npm run lint`, `npm run typecheck`, `npm run build` exit 0. Worklet 38.7kB, `/` 정적 생성. React Doctor 전체 92파일과 스테이징 후 변경 범위 모두 100/100점, `git diff --check`와 `git diff --cached --check` 통과. 사용자 요청에 따라 테스트·브라우저·실청취는 실행하지 않음.
+- 다음: 기타 코드 프리셋·스트로크. 전체 출력 실제 청취 및 누적 오디오 검증은 테스트 재개 지시 후 진행.
+
 ## 2026-09-28 — 기타 단음 샘플러와 공용 악기 입력
 
 - 요구사항: `RHY-02` 일부, 관련 `LOOP-02`, `MIX-02`, `SYS-02`. **구현 완료/미검증.** 사용자 지시대로 단위/오디오/E2E/브라우저/실청취는 실행하지 않음.

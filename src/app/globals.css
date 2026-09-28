@@ -478,3 +478,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .station-guitar-note.rt-Button:focus-visible { outline: 2px solid var(--station-blue); outline-offset: 2px; }
 .station-guitar-note.rt-Button:disabled { opacity: 0.45; cursor: not-allowed; }
 .station-guitar-note kbd { font-size: 10px; opacity: 0.8; }
+
+.station-output-volume {
+  display: grid; grid-template-columns: auto minmax(100px, 1fr) 64px auto auto; align-items: center; gap: 12px;
+  padding: 12px 16px; background: var(--station-panel); border-bottom: 1px solid var(--station-line);
+}
+.station-output-label { display: flex; flex-direction: column; gap: 3px; }
+.station-output-value { font: 14px var(--station-mono); text-align: right; color: var(--station-mint); }
+.station-output-volume .rt-Button { min-height: 44px; }
+.station-output-help { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 720px) {
+  .station-output-volume { grid-template-columns: minmax(0, 1fr) 64px; gap: 10px; }
+  .station-output-label { grid-column: 1 / -1; flex-direction: row; align-items: baseline; gap: 8px; }
+}

@@ -25,6 +25,7 @@ function fixture() {
     audioWorklet = { addModule: vi.fn(() => moduleLoad.promise) };
     resume = vi.fn(async () => { this.state = "running"; });
     close = vi.fn(async () => { await closing.promise; this.state = "closed"; });
+    createDynamicsCompressor = vi.fn(() => ({ threshold: { value: 0 }, knee: { value: 0 }, ratio: { value: 0 }, attack: { value: 0 }, release: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() }));
     createGain = vi.fn(() => ({ gain: { value: 0, setTargetAtTime: vi.fn() }, connect: vi.fn(), disconnect: vi.fn() }));
     constructor() { super(); contexts.push(this); }
   }
@@ -68,6 +69,21 @@ describe("audio engine startup and resource ownership", () => {
     f.engine.startTone();
     expect(f.nodes[0].port.postMessage).toHaveBeenCalledWith({ type: "start" });
     f.closing.resolve(); await f.engine.dispose();
+  });
+
+  it("sends loops, instruments, click, test tone and microphone monitoring to one listening bus", async () => {
+    const f = fixture(); f.engine.setOutputVolume(300); f.engine.setOutputMuted(true);
+    const start = f.engine.initialize(); f.moduleLoad.resolve(); await flush(); f.ready(); await start;
+    const gains = f.contexts[0].createGain.mock.results.map((result) => result.value);
+    const [output, mute, tone, click, loop] = gains;
+    expect(output.gain.value).toBe(3); expect(mute.gain.value).toBe(0);
+    expect(f.nodes[0].connect).toHaveBeenCalledWith(output, 4);
+    for (const source of [tone, click, loop]) expect(source.connect).toHaveBeenCalledWith(output);
+    expect(f.input.attachAudio).toHaveBeenCalledWith(f.contexts[0], f.nodes[0], output);
+    expect(f.nodes[0].connect).not.toHaveBeenCalledWith(f.contexts[0].destination, 4);
+    f.engine.setOutputVolume(400); expect(output.gain.setTargetAtTime).toHaveBeenLastCalledWith(4, 0, 0.01);
+    f.closing.resolve(); await f.engine.dispose();
+    expect(output.disconnect).toHaveBeenCalledOnce(); expect(mute.disconnect).toHaveBeenCalledOnce();
   });
 
   it.each(["module", "render"])("times out stalled %s startup and closes its resources", async (stage) => {

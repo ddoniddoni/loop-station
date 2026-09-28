@@ -1,4 +1,5 @@
 import { Heading, Text } from "@radix-ui/themes";
+import { OutputVolumeControls } from "@/components/audio/output-volume-controls";
 import { AudioSetup } from "@/components/audio/audio-setup";
 import { AudioEngineProvider } from "@/components/audio/audio-engine-provider";
 import { StudioWorkspace } from "@/components/studio/studio-workspace";
@@ -20,6 +21,7 @@ export default function Home() {
         </header>
         <main id="main" className="station-main" tabIndex={-1}>
           <details className="station-availability"><summary><StudioIcon name="info" size={13} /><span>프리뷰 · 8트랙 루프 스테이션</span><span>사용 가능 기능 안내</span></summary><p id="availability">{ko.availability}</p><p>{ko.privacy}</p></details>
+          <OutputVolumeControls />
           <StudioWorkspace />
         </main>
       </div>
