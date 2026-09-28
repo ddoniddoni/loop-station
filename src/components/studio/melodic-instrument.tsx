@@ -6,6 +6,8 @@ import { PIANO_KEYS } from "@/audio/instruments/piano-bank";
 import { melodicBase, MELODIC_INSTRUMENTS } from "@/audio/instruments/melodic-bank";
 import { useRecordingInputController } from "@/components/audio/audio-engine-provider";
 import { InstrumentRecording } from "./instrument-recording";
+import { GuitarChords } from "./guitar-chords";
+import { MelodicSetup } from "./melodic-setup";
 
 const noteNames = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
 const syllables = ["도", "도♯", "레", "레♯", "미", "파", "파♯", "솔", "솔♯", "라", "라♯", "시"];
@@ -59,7 +61,7 @@ export function MelodicInstrument({ trackId, onTrackChange }: { trackId: number;
   const input = useSyncExternalStore(recording.subscribe, recording.getSnapshot, recording.getServerSnapshot);
   const ready = input.source === state.instrument && input.routed && state.running;
   const config = MELODIC_INSTRUMENTS[state.instrument];
-  const base = melodicBase(state.instrument, state.octave);
+  const chords = state.instrument === "guitar" && state.guitarMode === "chords";
   useEffect(() => {
     const stop = () => melodic.stopAll();
     const hide = () => { if (document.hidden) stop(); };
@@ -69,20 +71,16 @@ export function MelodicInstrument({ trackId, onTrackChange }: { trackId: number;
   return <>
     <div className="station-piano-performance" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) melodic.stopAll(); }}
       onKeyUp={(event) => { if (PIANO_KEYS.some((item) => item.code === event.code)) { event.preventDefault(); melodic.noteOff(`key:${event.code}`); } }}>
-      <div className="station-piano-toolbar" role="group" aria-label={`${config.label} 옥타브`}>
-        <Button variant="outline" color="gray" aria-label={`${config.label} 한 옥타브 낮추기`} disabled={input.captureLocked || state.octave === config.octaves[0]} onClick={() => void melodic.setOctave(state.octave - 1)}>−</Button>
-        <Text as="span" size="2">{noteLabel(base)} — {noteLabel(base + 12)}</Text>
-        <Button variant="outline" color="gray" aria-label={`${config.label} 한 옥타브 높이기`} disabled={input.captureLocked || state.octave === config.octaves[2]} onClick={() => void melodic.setOctave(state.octave + 1)}>+</Button>
-      </div>
-      {state.phase !== "ready" && <Button variant="soft" disabled={state.phase === "loading" || input.captureLocked} onClick={() => void melodic.load()}>{state.phase === "loading" ? `${config.label} 불러오는 중…` : `${config.label} 음원 다시 불러오기`}</Button>}
-      <Text as="p" size="1" role="status">{state.issue ?? (ready ? "연주 준비됨 · 여러 음을 함께 눌러 화음을 만드세요." : `${config.label} 음원과 오디오 연결을 준비하고 있습니다.`)}</Text>
-      <MelodicKeys />
-      <Text as="p" size="1" color="gray" id="melodic-help">{state.instrument === "piano" ? "건반을 누르는 동안 연주합니다. 건반에 초점을 두면 A–K와 W E T Y U로 화음을 연주할 수 있어요." : "음표를 누르면 나일론 기타를 튕깁니다. 패드에 초점을 둔 뒤 표시된 키를 함께 누르면 화음이 됩니다. 손을 놓으면 잔향이 줄어듭니다."}</Text>
+      <MelodicSetup />
+      {chords ? <GuitarChords ready={ready} /> : <>
+        <MelodicKeys />
+        <Text as="p" size="1" color="gray" id="melodic-help">{state.instrument === "piano" ? "건반을 누르는 동안 연주합니다. 건반에 초점을 두면 A–K와 W E T Y U로 화음을 연주할 수 있어요." : "음표를 누르면 나일론 기타를 튕깁니다. 패드에 초점을 둔 뒤 표시된 키를 함께 누르면 화음이 됩니다. 손을 놓으면 잔향이 줄어듭니다."}</Text>
+      </>}
       <div className="station-drum-record-actions">
         {config.sustain && <Button variant="outline" aria-pressed={state.sustain} disabled={!ready} onClick={() => melodic.setSustain(!state.sustain)}>서스테인 {state.sustain ? "ON" : "OFF"}</Button>}
         <Button variant="outline" color="gray" disabled={!ready} onClick={() => melodic.stopAll()}>{config.label} 소리 끊기</Button>
       </div>
-      <Text as="p" size="1" color="gray">옥타브 변경·연주 영역 이탈·탭 숨김 시 남은 소리를 끕니다. 녹음 중 옥타브는 고정됩니다.</Text>
+      <Text as="p" size="1" color="gray">연주 방식·옥타브 변경, 연주 영역 이탈, 탭 숨김 시 남은 소리를 끕니다. 녹음 중에는 연주 방식과 옥타브가 고정됩니다.</Text>
     </div>
     <InstrumentRecording trackId={trackId} onTrackChange={onTrackChange} source={state.instrument} />
     <a className="station-sample-credit" href={`${config.assetPath}readme.txt`} target="_blank" rel="noreferrer">{config.credit}</a>

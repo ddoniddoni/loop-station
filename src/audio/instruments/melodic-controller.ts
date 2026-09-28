@@ -1,8 +1,9 @@
-import { melodicBank, melodicBase, MELODIC_INSTRUMENTS, MELODIC_MEMORY_BYTES, type MelodicInstrument } from "./melodic-bank";
+import { melodicBank, melodicBase, MELODIC_INSTRUMENTS, MELODIC_MEMORY_BYTES, type MelodicInstrument, type SampleRegion } from "./melodic-bank";
+import { GUITAR_CHORD_BANK, GUITAR_CHORD_SAMPLE_RATE, guitarChordNotes, STRUM_SPACING, type GuitarChord, type GuitarMode, type StrumDirection, type StrumSpeed } from "./guitar-chords";
 
-type Snapshot = { phase: "idle" | "loading" | "ready" | "error"; running: boolean; instrument: MelodicInstrument; octave: number; sustain: boolean; notes: number[]; issue: string | null };
+type Snapshot = { phase: "idle" | "loading" | "ready" | "error"; running: boolean; instrument: MelodicInstrument; octave: number; guitarMode: GuitarMode; chord: GuitarChord | null; sustain: boolean; notes: number[]; issue: string | null };
 type Voice = { token: string; note: number; source: AudioBufferSourceNode; gain: GainNode; held: boolean; releasing: boolean };
-const initial: Snapshot = { phase: "idle", running: false, instrument: "piano", octave: 4, sustain: false, notes: [], issue: null };
+const initial: Snapshot = { phase: "idle", running: false, instrument: "piano", octave: 4, guitarMode: "notes", chord: null, sustain: false, notes: [], issue: null };
 
 /** One bank, bounded polyphony, and audio-clock envelopes; no PCM in React. */
 export class MelodicController {
@@ -33,15 +34,19 @@ export class MelodicController {
   selectInstrument(instrument: MelodicInstrument): void {
     if (this.captureLocked || instrument === this.snapshot.instrument) return;
     this.unload();
-    this.update({ instrument, octave: MELODIC_INSTRUMENTS[instrument].defaultOctave });
+    this.update({ instrument, octave: MELODIC_INSTRUMENTS[instrument].defaultOctave, guitarMode: "notes" });
   }
   unload(): void {
     this.cancelLoad(); this.stopAll(); this.enabled = false; this.buffers.clear();
     this.update({ phase: "idle", issue: null });
   }
   setCaptureLocked(locked: boolean): void { this.captureLocked = locked; }
+  async setGuitarMode(guitarMode: GuitarMode): Promise<void> {
+    if (this.captureLocked || this.snapshot.instrument !== "guitar" || guitarMode === this.snapshot.guitarMode || !["notes", "chords"].includes(guitarMode)) return;
+    this.unload(); this.update({ guitarMode }); await this.load();
+  }
   async setOctave(octave: number): Promise<void> {
-    if (this.captureLocked || !MELODIC_INSTRUMENTS[this.snapshot.instrument].octaves.some((value) => value === octave) || octave === this.snapshot.octave) return;
+    if (this.captureLocked || this.snapshot.guitarMode === "chords" || !MELODIC_INSTRUMENTS[this.snapshot.instrument].octaves.some((value) => value === octave) || octave === this.snapshot.octave) return;
     this.cancelLoad(); this.stopAll(); this.buffers.clear();
     this.update({ octave, phase: "idle", issue: null });
     await this.load();
@@ -55,7 +60,8 @@ export class MelodicController {
     if (!context || this.request || this.snapshot.phase === "ready" || this.captureLocked) return;
     const request = new AbortController(); this.request = request;
     const config = MELODIC_INSTRUMENTS[this.snapshot.instrument];
-    const bank = melodicBank(this.snapshot.instrument, this.snapshot.octave);
+    const chords = this.snapshot.instrument === "guitar" && this.snapshot.guitarMode === "chords";
+    const bank = chords ? GUITAR_CHORD_BANK : melodicBank(this.snapshot.instrument, this.snapshot.octave);
     this.update({ phase: "loading", issue: null });
     let rejectAbort!: (reason: Error) => void;
     const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
@@ -68,6 +74,10 @@ export class MelodicController {
       const loading = async () => {
         // A cancelled browser decoder cannot be aborted. Wait before starting another bank.
         if (this.pendingDecode) await this.pendingDecode.catch(() => undefined);
+        if (!current()) throw new Error("취소됨");
+        // Keep the 19-sample chord bank at its original rate (~12.5MiB), even on
+        // 192kHz hardware. BufferSource resamples when playing into the live context.
+        const decoder = chords ? new OfflineAudioContext(1, 1, GUITAR_CHORD_SAMPLE_RATE) : context;
         const entries = new Map<string, AudioBuffer>();
         let bytes = 0;
         // Serial decoding bounds transient memory even across cancellation and retry.
@@ -80,7 +90,7 @@ export class MelodicController {
           const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", encoded)), (byte) => byte.toString(16).padStart(2, "0")).join("");
           if (hash !== metadata.sha256) throw new Error("음원의 무결성을 확인하지 못했습니다.");
           if (!current()) throw new Error("취소됨");
-          const decoding = context.decodeAudioData(encoded); this.pendingDecode = decoding;
+          const decoding = decoder.decodeAudioData(encoded); this.pendingDecode = decoding;
           let buffer: AudioBuffer;
           try { buffer = await decoding; } finally { if (this.pendingDecode === decoding) this.pendingDecode = null; }
           if (!current()) throw new Error("취소됨");
@@ -108,11 +118,39 @@ export class MelodicController {
     const context = this.context;
     const low = melodicBase(this.snapshot.instrument, this.snapshot.octave);
     if (!context || !this.bus || !this.enabled || !this.snapshot.running || context.state !== "running" || this.snapshot.phase !== "ready"
-      || !Number.isInteger(note) || note < low || note > low + 12 || !Number.isFinite(velocity) || velocity <= 0) return false;
+      || this.snapshot.guitarMode === "chords" || !Number.isInteger(note) || note < low || note > low + 12 || !Number.isFinite(velocity) || velocity <= 0) return false;
     if ([...this.voices].some((voice) => voice.token === token && voice.held)) return false;
     const metadata = melodicBank(this.snapshot.instrument, this.snapshot.octave).find((sample) => sample.low <= note && sample.high >= note);
     const buffer = metadata && this.buffers.get(metadata.file);
     if (!metadata || !buffer) return false;
+    this.startVoice(note, token, velocity, context.currentTime, metadata, buffer, true);
+    this.publishNotes(); return true;
+  }
+  strum(chord: GuitarChord, direction: StrumDirection, speed: StrumSpeed): boolean {
+    const context = this.context;
+    if (!context || !this.bus || !this.enabled || !this.snapshot.running || context.state !== "running" || this.snapshot.phase !== "ready"
+      || this.snapshot.instrument !== "guitar" || this.snapshot.guitarMode !== "chords" || !["down", "up"].includes(direction)
+      || !Object.hasOwn(STRUM_SPACING, speed)) return false;
+    const notes = guitarChordNotes(chord);
+    if (!notes.length) return false;
+    if (direction === "up") notes.reverse();
+    const voices: { note: number; metadata: SampleRegion; buffer: AudioBuffer }[] = [];
+    for (const note of notes) {
+      const metadata = GUITAR_CHORD_BANK.find((sample) => sample.low <= note && note <= sample.high);
+      const buffer = metadata && this.buffers.get(metadata.file);
+      if (!metadata || !buffer) return false; // Never play a partially loaded chord.
+      voices.push({ note, metadata, buffer });
+    }
+    this.stopAll(); // Includes sources scheduled in the future by the previous stroke.
+    const start = context.currentTime + 0.005;
+    voices.forEach(({ note, metadata, buffer }, index) => {
+      this.startVoice(note, `chord:${index}`, 0.55, start + index * STRUM_SPACING[speed], metadata, buffer, false);
+    });
+    this.update({ chord }); return true;
+  }
+  private startVoice(note: number, token: string, velocity: number, start: number, metadata: SampleRegion, buffer: AudioBuffer, held: boolean): void {
+    const context = this.context;
+    if (!context || !this.bus) return;
     if (this.voices.size >= 16) { const oldest = this.voices.values().next().value; if (oldest) this.stopVoice(oldest); }
     const source = context.createBufferSource(); const gain = context.createGain();
     source.buffer = buffer; source.playbackRate.value = 2 ** ((note - metadata.root) / 12);
@@ -121,10 +159,13 @@ export class MelodicController {
       source.loopEnd = (metadata.loopEnd + 1) / metadata.sampleRate; // SFZ end is inclusive.
     }
     gain.gain.value = Math.min(1, velocity);
-    const voice: Voice = { token, note, source, gain, held: true, releasing: false };
+    const voice: Voice = { token, note, source, gain, held, releasing: false };
     source.connect(gain); gain.connect(this.bus);
-    source.onended = () => { this.releaseVoice(voice); this.publishNotes(); };
-    this.voices.add(voice); source.start(context.currentTime); this.publishNotes(); return true;
+    source.onended = () => {
+      this.releaseVoice(voice); this.publishNotes();
+      if (!this.voices.size && this.snapshot.chord) this.update({ chord: null });
+    };
+    this.voices.add(voice); source.start(start);
   }
   noteOff(token: string): void {
     for (const voice of this.voices) if (voice.token === token && voice.held) {
@@ -147,7 +188,7 @@ export class MelodicController {
   }
   stopAll(): void {
     for (const voice of this.voices) this.stopVoice(voice);
-    if (this.snapshot.sustain || this.snapshot.notes.length) this.update({ sustain: false, notes: [] });
+    if (this.snapshot.sustain || this.snapshot.notes.length || this.snapshot.chord) this.update({ sustain: false, notes: [], chord: null });
   }
   private stopVoice(voice: Voice): void { voice.source.stop(); this.releaseVoice(voice); }
   private releaseVoice(voice: Voice): void {

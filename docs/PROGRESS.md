@@ -13,11 +13,26 @@
 - 이번 Phase 0 보강: Worklet 첫 처리 응답과 15초 시작 제한, 초기화/종료 Promise 공유, 취소·오류 정리·재시작의 작업 번호 확인, 종료 실패 재시도 구현. 단위 11개와 production 오디오 E2E 4개를 작성했으며 미실행. 정적 검사와 빌드 결과는 아래 로그 참조.
 - 이번 Phase 1: Tap Tempo로 4분음표 입력 간격의 BPM 제안·설정 적용, 40~240 BPM 범위·최근 네 간격 평균·빠른 입력 제외·긴 중단 후 재시작·상태 초기화·기존 템포 잠금을 구현함. 단위 18개와 production E2E 시나리오 4개는 작성만 했으며 미실행. 정적 검사 결과는 아래 로그 참조.
 - 별도 구현: 1마디 카운트인은 `feature/phase-1-count-in` / `f7195e0`에 구현·푸시되어 있으며 develop에는 아직 통합하지 않음. 카운트인 단위 26개·E2E 2개도 미실행이며 해당 브랜치의 기록을 따름.
-- 다음 작업: 기타 코드 프리셋·스트로크. 내장 드럼·피아노·기타는 사용자 요청으로 Phase 5에서 먼저 구현·미검증이며, 프로젝트 관리/복제 등은 별도 브랜치에 보존함. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
+- 다음 작업: 프로젝트 휴지통·복구. 기타 코드 프리셋·스트로크까지 구현했으며 내장 드럼·피아노·기타는 사용자 요청으로 Phase 5에서 먼저 구현·미검증이며, 프로젝트 관리/복제 등은 별도 브랜치에 보존함. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 - 개발 기준: [Phase별 로드맵](plan/README.md)과 [다음 작업 계획](plan/NEXT.md). 이후 기능 선택과 작업 범위는 이 계획을 기준으로 진행한다.
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
+
+## 2026-09-28 — 기타 코드 프리셋과 오디오 시계 스트로크
+
+- 요구사항: `RHY-02` 일부, 관련 `LOOP-02`, `MIX-02`, `SYS-02`. **구현 완료/미검증.** 사용자 요청의 다음 기능으로 NEXT.md의 기타 코드 프리셋·스트로크를 구현함. 테스트 중단 요청 유지.
+- Git: 시작 HEAD `6e756b9`, 깨끗한 작업 트리와 원격 작업 브랜치 일치 확인. fetch 후 origin/develop `e569efc`. 선행 악기 기반이 미통합인 동일 작업이므로 `feature/phase-5-drum-instrument`를 계속 사용함. merge/PR/배포 없음.
+- 연주: C(x32010), D(xx0232), E(022100), G(320003), Am(x02210), Em(022000), F(133211), Dm(xx0231). 표준 튜닝 E2/A2/D3/G3/B3/E4에 운지를 더한 명시적 보이싱이며 x 현은 제외함. 전체 코드 음역 E2–G4. 다운은 낮은 현부터, 업은 역순. 빠르게/보통/느리게의 현 간격은 15/30/60ms이고 각 입력마다 한 번 연주함.
+- 시계/수명: 공통 `AudioContext.currentTime + 5ms`에 현별 간격을 더해 `AudioBufferSourceNode.start()`로 예약함. 연주 간격에 JS 타이머를 쓰지 않음. 다음 스트로크는 이전 소리와 미래 예약 모두 종료하며 모드/입력 전환·정지·영역 이탈·탭 숨김·Context 중단·PANIC에서도 해제함. 자연 종료 후 코드 표시를 지움. 코드 최대 6발음, 공통 최대 16발음 유지. 기존 단음 note-on/off·피아노 서스테인은 유지함.
+- 로딩/메모리: 기존 CC0 기타 원본 중 19샘플, encoded 6,553,422bytes. 별도 코드 은행을 `OfflineAudioContext(1, 1, 44100)`에서 직렬 디코딩해 원본 프레임 기준 13,105,172bytes(약 12.50MiB)를 유지함. 활성 Context가 192kHz여도 54MiB로 확대 디코딩하지 않고 BufferSource 재생 시 재샘플링함. 코드 은행 전체 준비 후 입력을 허용하여 녹음 중 코드 변경에 fetch가 없음. 파일 크기/해시, 15초 제한, 실패 재시도, 이전 취소 decode 완료 대기와 32MiB 한도 유지. 공유 64MiB+드럼 8MiB 예약, 루프 작업 예산 56MiB 유지. 원본 음원·라이선스·의존성 변경 없음.
+- UI/녹음: Radix 단음/코드 모드, 업/다운·속도, 8코드 패드와 초점 내 1–8 키·Enter/Space 연주. 키 자동 반복 제외. 터치 목표 최소 44px, 코드 패드 86px, 초점 표시와 코드 이름 제공. 녹음 준비/진행 중 모드·옥타브·입력 변경은 잠기며 코드/방향/속도는 변경 가능. 현재 Worklet input 2의 기존 PCM·오버더빙·이력·v5 저장 경로 사용, 프로토콜 7 유지. 코드 설정/이벤트 자체는 저장하지 않음.
+- 변경 파일: `src/audio/instruments/guitar-chords.ts`, `melodic-controller.ts`, `melodic-bank.ts`; `src/components/studio/guitar-chords.tsx`, `melodic-setup.tsx`, `melodic-instrument.tsx`; `src/app/globals.css`; 기타 단위/E2E 시나리오와 README/계획/진행 기록.
+- 작성한 검증: 단위 12개 — 표준 운지/샘플 커버리지/예산, 192kHz Context에서 원본 rate 준비, 업/다운 예약 시각·피치·무타이머, 미래 발음 취소, 녹음 잠금/단음 경계, 비활성/중단/입력 전환/PANIC, decode 실패 재시도·늦은 결과 무시, Worklet 승인된 입력 경로 유지. production E2E 2개 — 녹음 중 코드 전환과 추가 요청 없음·실제 PCM/저장 복구/마이크 미요청, 실패 재시도·초점 이탈·정지/PANIC. **모두 작성만 했으며 미실행.**
+- 실제 검사: `npm run lint`, `npm run typecheck`, 최종 `npm run build` exit 0. 타입 검사와 빌드는 순차 실행함. Worklet 38.7kB, `/`·`/_not-found` 정적 생성. 첫 React Doctor의 화면 복잡도 경고 1개(92점)는 설정 영역을 MelodicSetup으로 분리해 해소했고 전체 재검사 97파일 100/100, 진단 없음. `git diff --check` 공백 오류 없음. 스테이징 후 `npx react-doctor@latest --verbose --scope changed`도 90파일 100/100, 진단 없음. `git diff --cached --check` 공백 오류 없음. 게시 대상은 동일 원격 작업 브랜치임.
+- 제한: 단위/오디오/E2E/브라우저/실청취 미실행. 실제 음색·줄 간격 체감·저사양 장치 예약 지연·44.1→48/192kHz 재샘플링·코드 급전환 시 클릭·모바일 배치·PCM 저장 복구는 미검증. 단음 샘플을 순차 재생하는 기본 스트로크이며 현 간 공명·여러 강도 레이어·자동 리듬 패턴은 미구현. Phase 5 및 RHY-02 전체 통과를 뜻하지 않음.
+- 설계 참고: [OfflineAudioContext 생성](https://developer.mozilla.org/en-US/docs/Web/API/OfflineAudioContext/OfflineAudioContext), [AudioBufferSourceNode.start](https://developer.mozilla.org/en-US/docs/Web/API/AudioBufferSourceNode/start), [예약 소스 stop](https://developer.mozilla.org/en-US/docs/Web/API/AudioScheduledSourceNode/stop). API 예약·샘플레이트 계약을 확인했으며 실제 브라우저 검증을 대신하지 않음.
+- 다음: 별도 프로젝트 관리 기반의 휴지통·복구. 기존 브랜치 통합은 별도 사용자 merge 요청 범위이며 누적 테스트는 재개 지시 후 진행함.
 
 ## 2026-09-28 — 전체 듣기 볼륨과 출력 증폭
 

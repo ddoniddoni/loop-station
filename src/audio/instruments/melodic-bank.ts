@@ -3,7 +3,7 @@ import { pianoBank, PIANO_ASSET_PATH, PIANO_RELEASE, type PianoOctave } from "./
 
 export type MelodicInstrument = "piano" | "guitar";
 export type SampleRegion = { file: string; sha256: string; bytes: number; channels: number; sampleRate: number; frames: number; low: number; high: number; root: number; loopStart: number | null; loopEnd: number | null };
-// Only the selected melodic instrument is retained. The largest bank is <32MiB at 192kHz.
+// One selected bank: octave banks stay <32MiB at 192kHz; chords decode at 44.1kHz.
 export const MELODIC_MEMORY_BYTES = 64 * 1024 * 1024;
 export const MELODIC_INSTRUMENTS = {
   piano: { label: "피아노", octaves: [3, 4, 5], defaultOctave: 4, offset: 0, release: PIANO_RELEASE, sustain: true,

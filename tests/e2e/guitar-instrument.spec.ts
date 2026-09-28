@@ -87,3 +87,50 @@ test("guitar loading retries, octave changes and focus/PANIC release held notes"
   await expect(panel.getByRole("button", { name: "오디오 시작", exact: true })).toBeEnabled();
   expect(await page.locator("html").getAttribute("data-mic-requested")).toBeNull();
 });
+
+test("preset strums change chords while recording and persist their PCM without new sample requests", async ({ page }) => {
+  const panel = await openGuitar(page);
+  await panel.getByRole("button", { name: "코드 · 스트로크", exact: true }).click();
+  const c = panel.getByRole("button", { name: "C 메이저 코드 연주", exact: true });
+  await expect(c).toBeEnabled();
+  let requests = 0;
+  page.on("request", (request) => { if (request.url().includes("/audio/guitar/")) requests++; });
+  await panel.getByRole("combobox", { name: "기타 녹음 길이" }).click();
+  await page.getByRole("option", { name: "1마디", exact: true }).click();
+  await panel.getByRole("button", { name: "기타 1마디 녹음", exact: true }).click();
+  await expect(panel.getByText("악기 연주를 녹음 중입니다. 끝나면 자동 반복합니다.", { exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "단음", exact: true })).toBeDisabled();
+  await c.click(); await page.waitForTimeout(180);
+  await panel.getByRole("button", { name: "↑ 업", exact: true }).click();
+  await c.focus(); await page.keyboard.press("4");
+  await expect(panel.getByRole("button", { name: "G 메이저 코드 연주", exact: true })).toHaveAttribute("data-ringing", "true");
+  await page.waitForTimeout(180);
+  await panel.getByRole("button", { name: "A 마이너 코드 연주", exact: true }).click();
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible({ timeout: 12_000 });
+  const before = await fingerprint(page);
+  expect(before).toMatchObject({ ticks: 3840, nonzero: true, finite: true }); expect(requests).toBe(0);
+  expect(await page.locator("html").getAttribute("data-mic-requested")).toBeNull();
+  await page.reload();
+  await expect(page.getByRole("button", { name: /로컬 저장 상태: 이 기기에 저장됨/ })).toBeVisible();
+  expect(await fingerprint(page)).toEqual(before);
+});
+
+test("chord mode retries loading and clears scheduled strokes on focus exit and PANIC", async ({ page }) => {
+  const panel = await openGuitar(page);
+  await expect(panel.getByRole("button", { name: "기타 E3 연주", exact: true })).toBeEnabled();
+  await page.route("**/audio/guitar/**/*.wav", (route) => route.abort());
+  await panel.getByRole("button", { name: "코드 · 스트로크", exact: true }).click();
+  const em = panel.getByRole("button", { name: "E 마이너 코드 연주", exact: true });
+  await expect(em).toBeDisabled();
+  const retry = panel.getByRole("button", { name: "기타 음원 다시 불러오기", exact: true });
+  await expect(retry).toBeEnabled(); await page.unroute("**/audio/guitar/**/*.wav"); await retry.click();
+  await expect(em).toBeEnabled();
+  await panel.getByRole("button", { name: "느리게", exact: true }).click(); await em.click();
+  await expect(em).toHaveAttribute("data-ringing", "true");
+  await panel.getByRole("combobox", { name: "녹음할 트랙", exact: true }).focus();
+  await expect(em).toHaveAttribute("data-ringing", "false");
+  await em.click(); await panel.getByRole("button", { name: "기타 소리 끊기", exact: true }).click();
+  await expect(em).toHaveAttribute("data-ringing", "false");
+  await em.click(); await page.getByRole("button", { name: "모든 오디오 종료 (PANIC)", exact: true }).click();
+  await expect(panel.getByRole("button", { name: "오디오 시작", exact: true })).toBeEnabled();
+});
