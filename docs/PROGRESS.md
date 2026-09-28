@@ -20,6 +20,20 @@
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
 
+
+## 2026-09-29 — 선택 트랙의 원본 PCM24 WAV 내보내기
+
+- 요구사항/범위: Phase 3 / `FILE-04` 첫 수직 기능. 저장된 선택 트랙 한 바퀴의 dry 모노 WAV를 구현했다. 믹스/스템·리샘플링·구간 선택·효과 테일·float32/디더 옵션은 후속이며 Phase 3 전체 통과를 선언하지 않는다.
+- Git 기준: 시작 시 `feature/phase-2-local-projects` / `6821e24`는 원격과 일치하고 작업 트리가 깨끗했다. fetch 후 origin/develop은 `e569efc`로 유지됐다. 진행 중인 프로젝트 관리의 파일 내보내기 후속 범위를 같은 브랜치에서 이어갔다. 별도 악기/전체 볼륨 브랜치와 develop은 변경하지 않았고 merge/rebase/PR/배포는 하지 않았다.
+- 사용자 흐름: 트랙 선택 → 설정의 선택 트랙 WAV 내보내기 → 파일 준비 → 다운로드. 모노·PCM24·원본 샘플레이트·한 바퀴 길이를 표시한다. 오버더빙 포함, 믹서/팬/Mute/Solo/마스터·클릭 제외, 정규화/디더 OFF다. ±1 범위 초과는 내보낸 파일에서만 제한하고 개수를 안내한다. 실제 OS 저장 여부는 브라우저 다운로드 목록에서 확인하도록 안내하며 자동 다운로드·외부 업로드·오디오 시작은 없다.
+- 오디오/파일: Dedicated Worker에서 WAVEFORMATEXTENSIBLE PCM24(68바이트 헤더, mono front-center, PCM GUID)를 작성한다. source metadata.frames만 인코딩해 여분 capacity 프레임을 제외하고 홀수 data 크기는 RIFF word padding을 붙인다. 샘플레이트 8~192kHz, 기존 1/2/4/8마디 capacity 계약과 finite sample을 확인한다. 한글/이모지는 보존하고 경로/제어문자를 치환한 프로젝트 이름·트랙 번호·샘플레이트·비트 깊이 파일명을 쓴다.
+- 자원/실패: 원본 PCM은 structured clone으로 Worker에 전달하며 transfer하지 않는다. 기존 history와 Worklet 사본·입력 clone·결과/Blob·여유를 128MiB 예산에서 검사하고 RIFF 4GiB 한도를 검사한다. 녹음/편집·미저장·저장 오류·불완전 PCM을 막는다. 준비/Blob 보관 중 편집·녹음·프로젝트 전환을 잠그며 Worker 진행률과 취소, 30초 무응답·작업 오류·잘못된 결과의 실패/재시도를 제공한다. 닫기/언마운트/실패 시 Worker terminate, Blob URL revoke, 잠금 해제를 수행한다. 늦은 응답은 Worker identity로 무시한다. 타임아웃은 루프 시계가 아니다.
+- 변경 파일: `src/audio/export/{wav,wav-worker,track-wav-exporter}.ts`, `src/audio/loop/station-controller.ts`, `src/components/studio/{track-wav-export,recording-track}.tsx`, `tests/audio/{wav,track-wav-exporter}.test.ts`, `tests/e2e/track-wav-export.spec.ts`, README와 계획/진행 문서. 저장 스키마·Worklet·DSP·의존성은 변경하지 않았다.
+- 작성한 검증: 단위 10개(헤더/GUID·PCM24 signed sample·guard 제외·홀수 padding·원본 보존·입력/메모리/이름·편집 잠금·취소와 늦은 응답·오류 재시도·timeout·빈 트랙), E2E 2개(원본 레이트/샘플 파일 다운로드와 저장 PCM 보존, Worker 실패 해제 및 Blob URL 폐기). **작성만 했으며 모두 미실행.** 첫 타입 검사에서 E2E mixer fixture의 readonly/필드 오류를 확인하여 실제 gainDb/mute 계약과 map으로 수정했다.
+- 실제 검사: `npm run lint`, `npm run typecheck`, `NEXT_TELEMETRY_DISABLED=1 npm run build` 성공. Next `/`, `/projects` 정적 생성, Worklet 37.4kB. React Doctor 최종 스테이징 변경 범위 91개 파일 100/100점, 진단 없음. `git diff --check`와 `git diff --cached --check` 통과. 빌드 산출물에서 별도 WAV Worker chunk 생성을 확인했다.
+- 제한/다음: 단위·오디오·E2E·브라우저 QA·청취는 사용자 중단 지시에 따라 실행하지 않았다. 브라우저 다운로드 정책·실제 외부 플레이어 PCM24 호환성·모바일 Dialog/포커스·다중 탭/기기 메모리는 미검증이다. 세션 전용/저장 실패 상태의 응급 export는 이번 범위에 포함하지 않는다. 다음 기능은 `FILE-03` 프로젝트 ZIP 백업·복구다.
+- 형식 근거: [Microsoft RIFF](https://learn.microsoft.com/en-us/windows/win32/xaudio2/resource-interchange-file-format--riff-), [WAVEFORMATEXTENSIBLE](https://learn.microsoft.com/en-us/windows/win32/api/mmreg/ns-mmreg-waveformatextensible), [MDN Blob URL 수명](https://developer.mozilla.org/en-US/docs/Web/API/URL/createObjectURL_static)을 확인했다. 이 자료 확인은 실제 생성 파일 검증을 대신하지 않는다.
+
 ## 2026-09-29 — 프로젝트 휴지통·복구
 
 - 요구사항/범위: Phase 2 / `FILE-02`, `FILE-06`, 상세 명세의 `/projects` 삭제·복구. **구현 완료/미검증.** 사용자 “다음 기능” 요청과 NEXT 계획에 따라 휴지통 이동/복구를 구현함. 자동/영구 삭제는 제공하지 않음.

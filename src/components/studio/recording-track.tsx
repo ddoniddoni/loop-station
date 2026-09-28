@@ -8,6 +8,7 @@ import { StudioIcon } from "@/components/ui/studio-icon";
 import { saveStatusLabel } from "./loop-save-label";
 import { trackIsEditing, workspaceBlocksTrack } from "./track-availability";
 import { RecordingLength } from "./recording-length";
+import { TrackWavExport } from "./track-wav-export";
 
 function barsLabel(bars: number): string { return `${bars} ${bars === 1 ? "BAR" : "BARS"}`; }
 
@@ -115,5 +116,5 @@ export function RecordedClipDetails({ trackId }: { trackId: number }) {
   const meta = snapshot.metadata;
   return <><div className="station-clip-fields"><div><span>{meta ? "LOOP MODE" : "NEXT RECORD"}</span><strong>{meta && !meta.complete ? "PARTIAL" : barsLabel(snapshot.recordBars)}</strong></div><div><span>LENGTH</span><strong>{meta ? `${(meta.frames / meta.sampleRate).toFixed(2)}s` : "—"}</strong></div></div>
     <Text as="p" size="1" color="gray" mt="2">{meta ? `${meta.frames.toLocaleString()} frames · ${meta.sampleRate / 1000}kHz · ${meta.bpm} BPM` : `선택한 트랙에서 ${snapshot.recordBars}마디를 녹음할 수 있습니다. 녹음 전 길이 선택은 이 탭에서만 유지됩니다.`}</Text>
-    <Text as="p" size="1" color="gray" mt="2">한 바퀴 오버더빙 · 직전 1회 Undo/Redo · 이 브라우저에 자동 저장. 입력 게인 적용 후 녹음하며 클릭은 제외합니다. 지연 보정은 준비 중입니다.</Text></>;
+    <Text as="p" size="1" color="gray" mt="2">한 바퀴 오버더빙 · 직전 1회 Undo/Redo · 이 브라우저에 자동 저장. 입력 게인 적용 후 녹음하며 클릭은 제외합니다. 지연 보정은 준비 중입니다.</Text><TrackWavExport trackId={trackId} /></>;
 }

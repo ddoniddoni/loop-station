@@ -24,6 +24,7 @@ export class StationController {
   private snapshot = initialSnapshot;
   private activeTrack: number | null = null;
   private hydrating = false;
+  private exporting = false;
   private context: AudioContext | null = null;
   private node: AudioWorkletNode | null = null;
   private mixer = defaultStationMix();
@@ -85,6 +86,7 @@ export class StationController {
   failProjectInitialization(error: unknown): void { this.persistence.failInitialization(error); }
   get projectChanging(): boolean { return this.persistence.replacing; }
   get projectChangeReason(): string | null {
+    if (this.exporting) return "WAV 내보내기 창을 닫은 뒤 편집하세요.";
     if (this.projectChanging) return "프로젝트를 전환하고 있습니다.";
     if (this.snapshot.performing) return "녹음·오버더빙·편집이 끝난 뒤 프로젝트를 전환하세요.";
     if (this.dirty || this.snapshot.mixerPending) return "현재 변경을 저장한 뒤 프로젝트를 전환하세요.";
@@ -96,6 +98,16 @@ export class StationController {
     return this.persistence.beginReplacement(initial);
   }
   cancelProjectChange(): void { this.persistence.cancelReplacement(); }
+  beginFileExport(): boolean {
+    if (this.projectChangeReason) return false;
+    this.exporting = true;
+    if (this.persistence.beginReplacement()) return true;
+    this.exporting = false; return false;
+  }
+  endFileExport(): void {
+    if (!this.exporting) return;
+    this.exporting = false; this.persistence.cancelReplacement();
+  }
   adoptProject(repository: SessionRepository<StationProject>, saved: StoredSession<StationProject> | null): void {
     if (this.node || this.context) throw new Error("오디오를 종료한 뒤 프로젝트를 전환하세요.");
     this.input.release();
