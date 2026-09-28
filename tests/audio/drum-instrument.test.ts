@@ -110,6 +110,7 @@ function routing() {
   const mic = { ...microphone.getSnapshot(), phase: "active" as const, routed: true, audioReady: true };
   vi.spyOn(microphone, "getSnapshot").mockImplementation(() => mic);
   vi.spyOn(controller.drums, "attach").mockImplementation(() => undefined);
+  vi.spyOn(controller.piano, "attach").mockImplementation(() => undefined);
   const drumState = { phase: "ready" as const, running: true, issue: null };
   vi.spyOn(controller.drums, "getSnapshot").mockImplementation(() => drumState);
   const messages: { type: string; revision: number; source: string; active: boolean }[] = [];

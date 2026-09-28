@@ -59,7 +59,7 @@ export class TestToneEngine {
     if (this.disposed) return;
     if (this.context.state !== "running") this.stopTone();
     this.input.setAudioRunning(this.context.state === "running");
-    this.recording?.drums.setRunning(this.context.state === "running");
+    this.recording?.setRunning(this.context.state === "running");
     this.loop.setRunning(this.context.state === "running");
     this.callbacks.onContextStateChange(this.context.state);
   };
@@ -118,7 +118,7 @@ export class TestToneEngine {
     this.assertActive();
 
     const node = new AudioWorkletNode(this.context, "loop-station-test-tone", {
-      numberOfInputs: 2,
+      numberOfInputs: 3,
       numberOfOutputs: 5,
       outputChannelCount: [1, 1, 1, 2, 1],
       channelCount: 1,
@@ -155,7 +155,7 @@ export class TestToneEngine {
         return;
       }
       this.input.setAudioRunning(false);
-      this.recording?.drums.setRunning(false);
+      this.recording?.setRunning(false);
       this.callbacks.onProcessorError();
     };
 
@@ -195,7 +195,7 @@ export class TestToneEngine {
       throw new AudioSetupError("not-running");
     }
     this.input.setAudioRunning(true);
-    this.recording?.drums.setRunning(true);
+    this.recording?.setRunning(true);
     this.loop.setRunning(true);
     this.callbacks.onContextStateChange("running");
   }
@@ -218,14 +218,14 @@ export class TestToneEngine {
 
   stopTransport(): void {
     if (!this.isReady || this.context.state !== "running") return;
-    this.recording?.drums.stopAll();
+    this.recording?.stopAll();
     this.loop.stop();
     this.node?.port.postMessage({ type: "transport-stop" });
   }
 
   resetTransport(): void {
     if (!this.isReady || this.context.state !== "running") return;
-    this.recording?.drums.stopAll();
+    this.recording?.stopAll();
     this.loop.stop();
     this.node?.port.postMessage({ type: "transport-reset" });
   }

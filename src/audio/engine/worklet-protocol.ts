@@ -1,5 +1,5 @@
 // Increment when the UI/processor startup contract becomes incompatible.
-export const WORKLET_PROTOCOL_VERSION = 5;
+export const WORKLET_PROTOCOL_VERSION = 6;
 export const AUDIO_STARTUP_TIMEOUT_MS = 15_000;
 
 export function isWorkletReady(value: unknown, sampleRate: number): boolean {

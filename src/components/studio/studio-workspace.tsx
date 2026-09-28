@@ -8,7 +8,7 @@ import { MixerConsole } from "@/components/studio/mixer-console";
 import { RecordedClipDetails, RecordingTrack } from "@/components/studio/recording-track";
 import { StudioMobileNavigation, type StudioView } from "@/components/studio/studio-navigation";
 import { StudioIcon } from "@/components/ui/studio-icon";
-import { DrumInstrument } from "./drum-instrument";
+import { BuiltInInstrument } from "./built-in-instrument";
 import { ko } from "@/lib/i18n/ko";
 
 const trackSlots = [
@@ -60,7 +60,7 @@ export function StudioWorkspace() {
   const [view, setView] = useState<StudioView>("tracks");
   return (
     <div className="station-studio" data-view={view}>
-      <div className="station-workspace"><DrumInstrument trackId={Number(selected.number) - 1} onTrackChange={(id) => { setSelected(trackSlots[id]); setBank(id < 4 ? 0 : 1); }} /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
+      <div className="station-workspace"><BuiltInInstrument trackId={Number(selected.number) - 1} onTrackChange={(id) => { setSelected(trackSlots[id]); setBank(id < 4 ? 0 : 1); }} /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
       <MixerConsole bank={bank} onBankChange={setBank} slots={trackSlots} />
       <StudioMobileNavigation view={view} onNavigate={setView} />
     </div>

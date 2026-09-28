@@ -16,8 +16,8 @@ export function StudioInputPanel() {
   return (
     <section className="station-inspector-section station-input-panel" aria-labelledby="input-routing-title">
       <Heading as="h3" id="input-routing-title" size="2">INPUT ROUTING &amp; PREAMP</Heading>
-      <Text as="p" size="1" role="status">녹음 입력: {source.source === "drums" ? "내장 드럼 · 마이크 소리는 녹음하지 않습니다." : "마이크"}</Text>
-      {source.source === "drums" && <Button variant="outline" color="gray" disabled={source.captureLocked || !input.audioReady} onClick={() => recording.select("microphone")}>마이크를 녹음 입력으로 사용</Button>}
+      <Text as="p" size="1" role="status">녹음 입력: {source.source === "microphone" ? "마이크" : `${source.source === "piano" ? "피아노" : "내장 드럼"} · 마이크 소리는 녹음하지 않습니다.`}</Text>
+      {source.source !== "microphone" && <Button variant="outline" color="gray" disabled={source.captureLocked || !input.audioReady} onClick={() => recording.select("microphone")}>마이크를 녹음 입력으로 사용</Button>}
       <div className="station-preamp">
         <div className="station-preamp-device"><span>Input Device</span><strong title={input.info?.label}>{input.info?.label || "마이크 미연결"}</strong></div>
         <div className="station-preamp-controls">

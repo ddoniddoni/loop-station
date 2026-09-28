@@ -67,9 +67,9 @@ function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
   if (snapshot.phase === "overdubbing") return "오버더빙 중 · 한 바퀴 후 자동 확정";
   if (snapshot.phase === "incomplete") return "중단된 녹음 · 부분 데이터 보관 중";
   if (snapshot.pendingPlay) return "다음 마디에서 재생 시작";
-  if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크 또는 내장 드럼 입력을 준비하세요.";
+  if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크 또는 내장 악기 입력을 준비하세요.";
   if (snapshot.canRestore) return "비운 루프 복구 가능 · 다음 녹음 완료 전까지";
-  if (!inputReady) return "마이크를 연결하거나 내장 악기에서 드럼 입력을 선택하세요.";
+  if (!inputReady) return "마이크를 연결하거나 내장 악기 입력을 선택하세요.";
   return `다음 마디부터 ${snapshot.recordBars}마디 · 모노 입력`;
 }
 

@@ -13,11 +13,25 @@
 - 이번 Phase 0 보강: Worklet 첫 처리 응답과 15초 시작 제한, 초기화/종료 Promise 공유, 취소·오류 정리·재시작의 작업 번호 확인, 종료 실패 재시도 구현. 단위 11개와 production 오디오 E2E 4개를 작성했으며 미실행. 정적 검사와 빌드 결과는 아래 로그 참조.
 - 이번 Phase 1: Tap Tempo로 4분음표 입력 간격의 BPM 제안·설정 적용, 40~240 BPM 범위·최근 네 간격 평균·빠른 입력 제외·긴 중단 후 재시작·상태 초기화·기존 템포 잠금을 구현함. 단위 18개와 production E2E 시나리오 4개는 작성만 했으며 미실행. 정적 검사 결과는 아래 로그 참조.
 - 별도 구현: 1마디 카운트인은 `feature/phase-1-count-in` / `f7195e0`에 구현·푸시되어 있으며 develop에는 아직 통합하지 않음. 카운트인 단위 26개·E2E 2개도 미실행이며 해당 브랜치의 기록을 따름.
-- 다음 작업: 피아노 샘플러. 내장 드럼은 사용자 요청으로 Phase 5에서 먼저 구현·미검증이며, 프로젝트 관리/복제 등은 별도 브랜치에 보존함. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
+- 다음 작업: 기타 단음 샘플러. 내장 드럼과 피아노는 사용자 요청으로 Phase 5에서 먼저 구현·미검증이며, 프로젝트 관리/복제 등은 별도 브랜치에 보존함. 테스트 재개 요청 후 Phase 0 오디오 수명·production Worklet·마이크 권한/장치 해제부터 확인하고 Tap Tempo·PCM·믹서·저장 및 별도 카운트인 브랜치를 검증함.
 - 상세 명세: `LOOP_STATION_SPEC.md`
 - 개발 기준: [Phase별 로드맵](plan/README.md)과 [다음 작업 계획](plan/NEXT.md). 이후 기능 선택과 작업 범위는 이 계획을 기준으로 진행한다.
 
 이 문서의 표는 완료 보고용 장식이 아니라 실제 구현 추적용이다. 가짜 입력으로 검증한 항목은 그 범위를 밝히고, 실제 마이크/브라우저/클라우드에서 미검증한 항목은 따로 남긴다.
+
+## 2026-09-28 — 피아노 샘플러와 건반 녹음
+
+- 요구사항: `RHY-02` 일부, 관련 `LOOP-02`, `MIX-02`, `SYS-02`. **구현 완료/미검증.** Phase 전체나 실제 연주 통과로 표시하지 않음.
+- Git: 시작 시 드럼 `d9868f3`와 원격 작업 브랜치 일치·작업 트리 깨끗함. fetch로 최신 origin/develop `e569efc` 확인. 드럼 기반이 미통합이고 동일 내장 악기 작업이므로 `feature/phase-5-drum-instrument`를 이어 사용함. develop 병합/PR/배포 없음.
+- 음원: [FreePats Upright Piano KW](https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html)의 small SFZ 2019-07-03 묶음. Gonzalo·Roberto, CC0-1.0. 원본 모노/44.1kHz/16-bit WAV 13개, 합계 4,765,912bytes를 변경 없이 포함하고 README·CC0 전문·원본 SFZ·묶음/각 파일 SHA-256·음역/루프 메타데이터 기록. BSD tar/Python 추출기는 해당 Delta+BZip2 압축을 처리하지 못해 공식 7-Zip 23.01을 임시 폴더에서 사용, 정상 추출·WAV 헤더와 원본 라이선스 확인. 프로젝트 의존성 추가 없음.
+- 샘플러: C3–C6, 한 옥타브(도–도 13건반)당 필요한 5개만 로드. SFZ 근음/영역으로 playbackRate를 계산하고 원본 loop_start / (loop_end + 1)을 초로 변환. 원본 release 0.6초를 AudioParam/AudioBufferSource의 오디오 시계에 예약. 단일 velocity 레이어·모노, 기본 강도 0.8, 라이브 버스 게인 0.25, 최대 16발음. MIDI/88건반/피아노롤/다중 강도 샘플은 미구현.
+- 입력/수명: 포인터별·키별 토큰으로 화음과 note-on/off, 중복 keydown 제외·키를 놓은 서스테인 음 분리. 건반 영역의 키보드만 사용. 옥타브 변경·포커스 이탈·탭 숨김·source 변경·정지/PANIC·Context 중단에서 발음을 정리. 설정/음표 이벤트는 저장하지 않고 기존 v5 PCM 이력/저장만 재사용.
+- 녹음: 마이크 input 0 / 드럼 input 1 / 피아노 input 2, Worklet 프로토콜 6과 3입력·5출력. 적용 응답 후 준비, 준비/녹음/덧녹음 중 입력·옥타브 잠금. 선택 악기만 output 4 라이브 모니터 및 PCM 캡처로 연결해 다른 악기/마이크/클릭/기존 루프 제외. ±1 제한은 하드 클리핑이며 라이브 악기는 루프 마스터/미터 제외. 마이크 자동 요청 없음.
+- 메모리: 피아노 최대 은행 192kHz에서 21,725,260bytes, decoded 24MiB 한도·48MiB 예약. 드럼 8MiB를 합해 악기 56MiB, 기존 128MiB 중 루프 예산 72MiB. WAV 크기·SHA-256 확인 후 디코딩. 옥타브 교체 시 기존 버퍼/발음 해제. 로딩 15초 제한과 재시도, 취소된 decode 종료를 기다려 새 decode와 중첩 방지. 드럼도 악기 전환 취소와 이전 로드 종료 대기를 보완함. Context 192kHz 초과는 준비 거절.
+- UI/파일: `piano-{bank,controller}.ts`, `drum-controller.ts`, RecordingInputController, engine/protocol/processor; `built-in-instrument.tsx`(기존 drum-instrument 대체), 공유 `instrument-recording.tsx`, `piano-instrument.tsx`, workspace/input/track, globals.css. `public/audio/piano/freepats-20190703/*`, README/계획/이 진행 기록. Radix·기존 콘솔 토큰 재사용, 흰/검은 건반·초점/누름 상태·좁은 화면 수평 스크롤.
+- 작성한 시나리오: `piano-instrument.test.ts` 7개(샘플/반음/루프·화음/release·서스테인/16발음·옥타브 잠금/종료·변조/재시도·늦은 decode 취소·시간 초과/중첩 방지). 기존 Worklet 테스트에 피아노 PCM 분리 1개를 추가하고 드럼 라우팅 fixture를 갱신함. `piano-instrument.spec.ts` 2개(실제 화음 PCM/마이크 미요청/해시 복구, 실패/재시도/옥타브/포커스/PANIC), 기존 드럼 E2E 이름/안내 갱신. **전부 미실행.**
+- 실제 검사: `npm run lint`, `npm run typecheck`, `npm run build` exit 0. Worklet 38.7kB와 `/` 정적 생성. React Doctor 전체 85개 파일 100/100점, 스테이징 후 변경 범위 진단도 100/100점. diff 공백 검사에서 신규 파일의 끝 빈 줄 1개를 수정함. 테스트 중단 요청에 따라 단위·오디오·E2E·브라우저·실청취를 실행하지 않음.
+- 제한/다음: 실제 음정/루프 경계/화음 음질·릴리스·모바일 멀티터치·포커스·녹음/오버더빙/Undo·저장 복구는 미검증. 다음은 기타 단음 샘플러이며 코드/스트로크는 후속 단위로 진행.
 
 ## 2026-09-28 — CC0 내장 드럼과 루프 녹음 선행 구현
 
@@ -48,7 +62,7 @@
 | 2 | 8트랙, 오버더빙, 로컬 저장 | 부분 구현 | 8트랙의 공통 시계 반복·오버더빙·1단계 Undo/Redo·프로젝트 자동 저장과 v1 이전 구현. 트랙 볼륨·팬·Mute·Solo, 루프 마스터·미터와 v5 저장 구현. 1/2/4/8마디 선택 연결, 실제 검증은 남음 |
 | 3 | 편집, 지연 보정, 파일 입출력 | 미착수 | 기본 루핑 제품 완성 목표 |
 | 4 | FX, 장면, 내부 녹음 | 미착수 | 라우팅/공연 녹음 검증 |
-| 5 | MIDI, 리듬, 자동화, 곡 구성 | 부분 구현·미검증 | 사용자 요청으로 내장 드럼 8패드·기존 PCM 루프 녹음만 먼저 구현. 피아노·기타·MIDI·시퀀서는 후속 |
+| 5 | MIDI, 리듬, 자동화, 곡 구성 | 부분 구현·미검증 | 사용자 요청으로 내장 드럼 8패드·피아노 건반과 기존 PCM 루프 녹음을 먼저 구현. 기타·MIDI·시퀀서는 후속 |
 | 6 | 고급 DSP와 고급 루프 | 미착수 | 변환 음질/성능 게이트 |
 | 7 | 선택적 Supabase 클라우드 | 미착수 | 사용자 활성화 및 환경 필요 |
 | 8 | 출시 검증 | 미착수 | 지원 범위와 실제 측정값 확정 |
@@ -103,7 +117,7 @@
 | FX-05 | FX 프리셋과 매크로 | 5 | 미착수 | — |
 | FX-06 | 독립 시간/음정 변환 | 6 | 미착수 | — |
 | RHY-01 | 드럼 스텝 시퀀서 | 5 | 미착수 | — |
-| RHY-02 | 샘플 패드와 기본 악기 | 5 | 부분 구현·미검증 | CC0 드럼 8패드·하이햇 초크·PCM 녹음/저장 연결. 16패드·교체·MIDI·피아노/기타와 실제 검증은 남음 |
+| RHY-02 | 샘플 패드와 기본 악기 | 5 | 부분 구현·미검증 | CC0 드럼 8패드와 피아노 C3–C6·화음·서스테인·PCM 녹음/저장 연결. 16패드·교체·MIDI·기타와 실제 검증은 남음 |
 | MIDI-01 | 키보드 단축키 | 2 | 미착수 | — |
 | MIDI-02 | MIDI Learn과 풋 컨트롤 | 5 | 미착수 | — |
 | MIDI-03 | MIDI 클립 | 5 | 미착수 | — |
@@ -675,4 +689,4 @@ AudioContext·Worklet·마이크 입력·공통 시계·메트로놈과 8트랙�
 
 ## 다음 Codex 작업
 
-시작 시 `AGENTS.md`, [개발 로드맵](plan/README.md), [현재 작업 계획](plan/NEXT.md), 이 기록을 읽는다. 다음 기능은 피아노 샘플러다. 내장 드럼은 Phase 5에서 선행 구현했으며 실제 연주/PCM 검증은 중단 상태다. 프로젝트 관리/복제 등 미통합 기능은 NEXT.md의 별도 브랜치를 따른다. Tap Tempo와 1/2/4/8마디 녹음 길이는 구현 완료/미검증이며 카운트인은 별도 브랜치의 구현·미통합 상태다. 테스트 재개 요청 후 Phase 0의 `audio-engine.test.ts`·`audio-lifecycle.spec.ts`, 권한·환경 진단·장치 해제를 먼저 확인하고 Tap Tempo·길이별 PCM·오버더빙·이력·v1~v4→v5 저장 이전·믹서, `mixed-loop-lengths.test.ts`의 10분 DSP 시나리오와 `local-save.spec.ts`를 검증한다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 현재 저장 형식은 schemaVersion 5이고 v1/v2/v3/v4 읽기 이전을 지원한다. 다음 변경도 기존 데이터를 보존한다. 선택 길이는 준비 시작 시 고정하고 PCM 메타데이터의 ticks를 반복·오버더빙·이력 기준으로 유지한다. 후속 세부 범위는 NEXT.md를 따른다.
+시작 시 `AGENTS.md`, [개발 로드맵](plan/README.md), [현재 작업 계획](plan/NEXT.md), 이 기록을 읽는다. 다음 기능은 기타 단음 샘플러다. 내장 드럼과 피아노는 Phase 5에서 선행 구현했으며 실제 연주/PCM 검증은 중단 상태다. 프로젝트 관리/복제 등 미통합 기능은 NEXT.md의 별도 브랜치를 따른다. Tap Tempo와 1/2/4/8마디 녹음 길이는 구현 완료/미검증이며 카운트인은 별도 브랜치의 구현·미통합 상태다. 테스트 재개 요청 후 Phase 0의 `audio-engine.test.ts`·`audio-lifecycle.spec.ts`, 권한·환경 진단·장치 해제를 먼저 확인하고 Tap Tempo·길이별 PCM·오버더빙·이력·v1~v4→v5 저장 이전·믹서, `mixed-loop-lengths.test.ts`의 10분 DSP 시나리오와 `local-save.spec.ts`를 검증한다. 그 전에는 Phase 0/1/2와 인수 기준을 검증 완료로 표시하지 않는다. 현재 저장 형식은 schemaVersion 5이고 v1/v2/v3/v4 읽기 이전을 지원한다. 다음 변경도 기존 데이터를 보존한다. 선택 길이는 준비 시작 시 고정하고 PCM 메타데이터의 ticks를 반복·오버더빙·이력 기준으로 유지한다. 후속 세부 범위는 NEXT.md를 따른다.

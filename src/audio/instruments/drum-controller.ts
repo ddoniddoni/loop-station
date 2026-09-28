@@ -16,6 +16,7 @@ export class DrumController {
   private voices = new Set<Voice>();
   private request: AbortController | null = null;
   private enabled = false;
+  private pendingLoads: Promise<unknown> | null = null;
   readonly getSnapshot = () => this.snapshot;
   readonly getServerSnapshot = () => initial;
   readonly subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -36,6 +37,11 @@ export class DrumController {
     this.setRunning(context.state === "running");
   }
 
+  cancelLoad(): void {
+    const request = this.request; this.request = null; request?.abort();
+    if (this.snapshot.phase === "loading") this.update({ phase: "idle", issue: null });
+  }
+
   async load(): Promise<void> {
     const context = this.context;
     if (!context || this.request || this.snapshot.phase === "ready") return;
@@ -51,22 +57,30 @@ export class DrumController {
       if (context.sampleRate > 192_000) throw new Error("내장 드럼은 192kHz 이하 오디오에서 사용할 수 있습니다.");
       // Exactly eight known assets: <650KiB encoded and <4MiB decoded at 192kHz.
       // Hash verification precedes decode; the 8MiB reserve includes transient copies.
-      const loading = Promise.all(DRUM_KIT.map(async (pad) => {
-        const metadata = provenance.samples.find((sample) => sample.file === pad.file);
-        const response = await fetch(DRUM_ASSET_PATH + pad.file, { signal: request.signal });
-        if (!response.ok) throw new Error("드럼 음원을 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요.");
-        const encoded = await response.arrayBuffer();
-        if (!metadata || encoded.byteLength !== metadata.bytes) throw new Error("드럼 음원 파일이 올바르지 않습니다. 다시 시도하세요.");
-        const digest = await crypto.subtle.digest("SHA-256", encoded);
-        const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-        if (hash !== metadata.sha256) throw new Error("드럼 음원의 무결성을 확인하지 못했습니다. 다시 시도하세요.");
+      const loading = async () => {
+        if (this.pendingLoads) await this.pendingLoads;
         if (request.signal.aborted) throw new Error("음원 준비가 취소되었습니다.");
-        const buffer = await context.decodeAudioData(encoded);
-        if (request.signal.aborted || this.context !== context) throw new Error("음원 준비가 취소되었습니다.");
-        if (buffer.numberOfChannels !== 1 || buffer.duration > 3) throw new Error("지원하지 않는 드럼 음원 형식입니다.");
-        return [pad.id, buffer] as const;
-      }));
-      const entries = await Promise.race([loading, cancelled]);
+        const jobs = DRUM_KIT.map(async (pad) => {
+          const metadata = provenance.samples.find((sample) => sample.file === pad.file);
+          const response = await fetch(DRUM_ASSET_PATH + pad.file, { signal: request.signal });
+          if (!response.ok) throw new Error("드럼 음원을 불러오지 못했습니다. 연결을 확인하고 다시 시도하세요.");
+          const encoded = await response.arrayBuffer();
+          if (!metadata || encoded.byteLength !== metadata.bytes) throw new Error("드럼 음원 파일이 올바르지 않습니다. 다시 시도하세요.");
+          const digest = await crypto.subtle.digest("SHA-256", encoded);
+          const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+          if (hash !== metadata.sha256) throw new Error("드럼 음원의 무결성을 확인하지 못했습니다. 다시 시도하세요.");
+          if (request.signal.aborted) throw new Error("음원 준비가 취소되었습니다.");
+          const buffer = await context.decodeAudioData(encoded);
+          if (request.signal.aborted || this.context !== context) throw new Error("음원 준비가 취소되었습니다.");
+          if (buffer.numberOfChannels !== 1 || buffer.duration > 3) throw new Error("지원하지 않는 드럼 음원 형식입니다.");
+          return [pad.id, buffer] as const;
+        });
+        const drained = Promise.allSettled(jobs);
+        this.pendingLoads = drained;
+        void drained.then(() => { if (this.pendingLoads === drained) this.pendingLoads = null; });
+        return Promise.all(jobs);
+      };
+      const entries = await Promise.race([loading(), cancelled]);
       if (this.request !== request) return;
       const bytes = entries.reduce((sum, [, buffer]) => sum + buffer.length * 4, 0);
       if (bytes > DRUM_MEMORY_BYTES / 2) throw new Error("드럼 음원 메모리 크기가 허용 범위를 넘었습니다.");
@@ -114,7 +128,7 @@ export class DrumController {
     this.voices.delete(voice);
   }
   detach(): void {
-    this.request?.abort(); this.request = null;
+    this.cancelLoad();
     this.stopAll();
     this.silence?.stop(); this.silence?.disconnect(); this.silence = null;
     this.bus?.disconnect(); this.bus = null;

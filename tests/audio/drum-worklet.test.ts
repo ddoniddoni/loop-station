@@ -13,10 +13,10 @@ async function fixture() {
   const processor = new Constructor();
   const send = (data: unknown) => processor.port.onmessage?.({ data });
   let frame = 0;
-  const render = (size: number, mic = 0.75, drum = 0.25) => {
+  const render = (size: number, mic = 0.75, drum = 0.25, piano = -0.125) => {
     vi.stubGlobal("currentFrame", frame);
     const outputs = [1, 1, 1, 2, 1].map((channels) => Array.from({ length: channels }, () => new Float32Array(size)));
-    processor.process([[new Float32Array(size).fill(mic)], [new Float32Array(size).fill(drum)]], outputs);
+    processor.process([[new Float32Array(size).fill(mic)], [new Float32Array(size).fill(drum)], [new Float32Array(size).fill(piano)]], outputs);
     frame += size;
     return outputs;
   };
@@ -24,10 +24,10 @@ async function fixture() {
 }
 
 describe("actual processor instrument routing", () => {
-  it("captures only drum PCM, excludes the microphone and click, and survives microphone disconnection", async () => {
+  it.each(["drums", "piano"] as const)("captures only %s PCM, excludes other inputs and click, and survives microphone disconnection", async (source) => {
     const f = await fixture();
     f.send({ type: "input-route", revision: 1, active: true });
-    f.send({ type: "capture-route", revision: 1, source: "drums", active: true });
+    f.send({ type: "capture-route", revision: 1, source, active: true });
     f.send({ type: "metronome-enable", enabled: true });
     const config = { bpm: 120, numerator: 4, denominator: 4 };
     const bytes = recordingCapacity(8000, config, 1) * 4;
@@ -40,7 +40,7 @@ describe("actual processor instrument routing", () => {
     const captured = f.messages.find((data) => typeof data === "object" && data !== null && "type" in data && data.type === "loop-captured");
     expect(captured).toMatchObject({ captureMode: "record", metadata: { complete: true, frames: 16000 } });
     if (!captured || typeof captured !== "object" || !("pcm" in captured) || !(captured.pcm instanceof ArrayBuffer)) throw new Error("No captured PCM");
-    expect(Array.from(new Float32Array(captured.pcm).slice(0, 16000)).every((value) => value === 0.25)).toBe(true);
+    expect(Array.from(new Float32Array(captured.pcm).slice(0, 16000)).every((value) => value === (source === "piano" ? -0.125 : 0.25))).toBe(true);
   });
   it("mutes drum audition when microphone is selected and keeps microphone monitoring separate", async () => {
     const f = await fixture(); f.send({ type: "input-route", revision: 1, active: true });
