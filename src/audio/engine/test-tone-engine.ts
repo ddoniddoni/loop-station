@@ -1,3 +1,4 @@
+import type { RecordingInputController } from "../input/recording-input-controller";
 import { isTransportSnapshot, type TransportConfig, type TransportSnapshot } from "../transport/audio-frame-clock";
 import type { MicrophoneController } from "../input/microphone-controller";
 import type { StationController } from "../loop/station-controller";
@@ -58,11 +59,12 @@ export class TestToneEngine {
     if (this.disposed) return;
     if (this.context.state !== "running") this.stopTone();
     this.input.setAudioRunning(this.context.state === "running");
+    this.recording?.drums.setRunning(this.context.state === "running");
     this.loop.setRunning(this.context.state === "running");
     this.callbacks.onContextStateChange(this.context.state);
   };
 
-  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController, private readonly loop: StationController) {
+  constructor(private readonly callbacks: EngineCallbacks, private readonly input: MicrophoneController, private readonly loop: StationController, private readonly recording?: RecordingInputController) {
     if (!window.isSecureContext) {
       throw new AudioSetupError("insecure-context");
     }
@@ -116,9 +118,9 @@ export class TestToneEngine {
     this.assertActive();
 
     const node = new AudioWorkletNode(this.context, "loop-station-test-tone", {
-      numberOfInputs: 1,
-      numberOfOutputs: 4,
-      outputChannelCount: [1, 1, 1, 2],
+      numberOfInputs: 2,
+      numberOfOutputs: 5,
+      outputChannelCount: [1, 1, 1, 2, 1],
       channelCount: 1,
       channelCountMode: "explicit",
     });
@@ -132,6 +134,7 @@ export class TestToneEngine {
         return;
       }
       this.input.acceptMeter(data);
+      this.recording?.accept(data);
       this.loop.accept(data);
       if (isTransportSnapshot(data)) {
         this.loop.acceptTransport(data);
@@ -152,6 +155,7 @@ export class TestToneEngine {
         return;
       }
       this.input.setAudioRunning(false);
+      this.recording?.drums.setRunning(false);
       this.callbacks.onProcessorError();
     };
 
@@ -164,6 +168,7 @@ export class TestToneEngine {
     this.loopGain = this.context.createGain();
     this.loopGain.gain.value = 1; // Master gain and stereo output metering live in the Worklet.
     node.connect(this.loopGain, 3);
+    node.connect(this.context.destination, 4);
     this.loopGain.connect(this.context.destination);
     node.connect(toneGain, 0);
     node.connect(clickGain, 1);
@@ -175,6 +180,7 @@ export class TestToneEngine {
     this.assertActive();
     if (this.context.state !== "running") throw new AudioSetupError("not-running");
     this.input.attachAudio(this.context, node);
+    this.recording?.attach(this.context, node);
     this.loop.attach(this.context, node);
     this.context.addEventListener("statechange", this.handleContextStateChange);
     this.ready = true;
@@ -189,6 +195,7 @@ export class TestToneEngine {
       throw new AudioSetupError("not-running");
     }
     this.input.setAudioRunning(true);
+    this.recording?.drums.setRunning(true);
     this.loop.setRunning(true);
     this.callbacks.onContextStateChange("running");
   }
@@ -211,12 +218,14 @@ export class TestToneEngine {
 
   stopTransport(): void {
     if (!this.isReady || this.context.state !== "running") return;
+    this.recording?.drums.stopAll();
     this.loop.stop();
     this.node?.port.postMessage({ type: "transport-stop" });
   }
 
   resetTransport(): void {
     if (!this.isReady || this.context.state !== "running") return;
+    this.recording?.drums.stopAll();
     this.loop.stop();
     this.node?.port.postMessage({ type: "transport-reset" });
   }
@@ -258,6 +267,7 @@ export class TestToneEngine {
     this.readyWaiter?.reject(new AudioSetupError("disposed"));
     this.readyWaiter = null;
     this.context.removeEventListener("statechange", this.handleContextStateChange);
+    this.recording?.detach();
     this.loop.detach();
     this.input.detachAudio();
     if (this.node) {

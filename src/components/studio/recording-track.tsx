@@ -3,7 +3,7 @@
 import { Button, Card, Heading, Text } from "@radix-ui/themes";
 import { useSyncExternalStore } from "react";
 import { isCapturePhase, type LoopSnapshot } from "@/audio/loop/loop-controller";
-import { useLoopController, useMicrophoneController } from "@/components/audio/audio-engine-provider";
+import { useLoopController, useRecordingInputController } from "@/components/audio/audio-engine-provider";
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { saveStatusLabel } from "./loop-save-label";
 import { trackIsEditing, workspaceBlocksTrack } from "./track-availability";
@@ -42,7 +42,7 @@ function LoopEditControls({ snapshot, inputReady, trackId }: { snapshot: LoopSna
   const canOverdub = snapshot.connected && inputReady && snapshot.phase === "playing" && !snapshot.pendingPlay && !busy;
   return <div className="station-track-tools station-recording-tools">
     <Button className="station-overdub-action" variant="outline" disabled={!canOverdub} aria-describedby={`recording-hint-${trackId}`}
-      title="마이크를 연결하고 루프를 재생하면 한 바퀴 덧녹음할 수 있습니다." onClick={() => void controller.overdub()}>
+      title="녹음 입력을 준비하고 루프를 재생하면 한 바퀴 덧녹음할 수 있습니다." onClick={() => void controller.overdub()}>
       <StudioIcon name="plus" size={13} />오버더빙 · 1회
     </Button>
     <Button variant="outline" color="gray" disabled={!snapshot.canUndo || busy || !snapshot.connected}
@@ -67,9 +67,9 @@ function recordingHint(snapshot: LoopSnapshot, inputReady: boolean): string {
   if (snapshot.phase === "overdubbing") return "오버더빙 중 · 한 바퀴 후 자동 확정";
   if (snapshot.phase === "incomplete") return "중단된 녹음 · 부분 데이터 보관 중";
   if (snapshot.pendingPlay) return "다음 마디에서 재생 시작";
-  if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크를 연결하세요.";
+  if (snapshot.hasClip) return inputReady ? "재생 중 오버더빙 가능 · 직전 1회 Undo/Redo" : "오버더빙하려면 마이크 또는 내장 드럼 입력을 준비하세요.";
   if (snapshot.canRestore) return "비운 루프 복구 가능 · 다음 녹음 완료 전까지";
-  if (!inputReady) return "입력 설정에서 마이크를 연결하세요.";
+  if (!inputReady) return "마이크를 연결하거나 내장 악기에서 드럼 입력을 선택하세요.";
   return `다음 마디부터 ${snapshot.recordBars}마디 · 모노 입력`;
 }
 
@@ -84,9 +84,9 @@ function RecordingWindow({ snapshot }: { snapshot: LoopSnapshot }) {
 
 export function RecordingTrack({ trackId, name, tone, selected, onSelect }: { trackId: number; name: string; tone: string; selected: boolean; onSelect: () => void }) {
   const controller = useLoopController(trackId);
-  const microphone = useMicrophoneController();
+  const recording = useRecordingInputController();
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getServerSnapshot);
-  const input = useSyncExternalStore(microphone.subscribe, microphone.getSnapshot, microphone.getServerSnapshot);
+  const input = useSyncExternalStore(recording.subscribe, recording.getSnapshot, recording.getServerSnapshot);
   const inputReady = input.phase === "active" && input.routed;
   const number = String(trackId + 1).padStart(2, "0");
   return (

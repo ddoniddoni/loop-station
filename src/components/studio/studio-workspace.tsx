@@ -8,6 +8,7 @@ import { MixerConsole } from "@/components/studio/mixer-console";
 import { RecordedClipDetails, RecordingTrack } from "@/components/studio/recording-track";
 import { StudioMobileNavigation, type StudioView } from "@/components/studio/studio-navigation";
 import { StudioIcon } from "@/components/ui/studio-icon";
+import { DrumInstrument } from "./drum-instrument";
 import { ko } from "@/lib/i18n/ko";
 
 const trackSlots = [
@@ -21,24 +22,6 @@ const trackSlots = [
   { number: "08", name: "Texture", tone: "muted" },
 ] as const;
 type TrackSlot = (typeof trackSlots)[number];
-
-function LibraryPanel() {
-  return (
-    <aside id="library" tabIndex={-1} className="station-library" aria-labelledby="library-title">
-      <div className="station-library-head">
-        <Heading as="h2" id="library-title" size="4"><StudioIcon name="folder" />Library Browser</Heading>
-        <Text as="p" size="2" color="gray">내 사운드 라이브러리</Text>
-      </div>
-      <div className="station-library-tabs" aria-label="라이브러리 유형"><span className="is-current">Loops</span><span>Samples</span><span>Presets</span><span>Files</span></div>
-      <div className="station-library-content">
-        <div className="station-library-row"><StudioIcon name="folder" size={16} /><span>My Loops</span><small>0</small></div>
-        <div className="station-library-row"><StudioIcon name="folder" size={16} /><span>Imported Samples</span><small>0</small></div>
-        <div className="station-library-empty"><StudioIcon name="upload" size={24} /><Text as="p" size="2">{ko.studioLibraryEmpty}</Text><Text as="p" size="1" color="gray">샘플 가져오기 준비 중</Text></div>
-      </div>
-      <div className="station-library-foot"><Button type="button" variant="outline" color="gray" disabled aria-describedby="availability"><StudioIcon name="upload" size={16} />Import Sample</Button><Text as="p" size="1" color="gray">로컬 라이브러리 · 준비 중</Text></div>
-    </aside>
-  );
-}
 
 function TrackBoard({ selected, onSelect, bank, onBankChange }: { selected: TrackSlot; onSelect: (slot: TrackSlot) => void; bank: number; onBankChange: (bank: number) => void }) {
   return (
@@ -77,7 +60,7 @@ export function StudioWorkspace() {
   const [view, setView] = useState<StudioView>("tracks");
   return (
     <div className="station-studio" data-view={view}>
-      <div className="station-workspace"><LibraryPanel /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
+      <div className="station-workspace"><DrumInstrument trackId={Number(selected.number) - 1} onTrackChange={(id) => { setSelected(trackSlots[id]); setBank(id < 4 ? 0 : 1); }} /><TrackBoard selected={selected} onSelect={setSelected} bank={bank} onBankChange={setBank} /><InspectorPanel selected={selected} /></div>
       <MixerConsole bank={bank} onBankChange={setBank} slots={trackSlots} />
       <StudioMobileNavigation view={view} onNavigate={setView} />
     </div>

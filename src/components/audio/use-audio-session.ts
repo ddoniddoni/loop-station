@@ -5,6 +5,7 @@ import { AudioSetupError, TestToneEngine } from "@/audio/engine/test-tone-engine
 import type { MicrophoneController } from "@/audio/input/microphone-controller";
 import type { StationController } from "@/audio/loop/station-controller";
 import type { TransportConfig, TransportSnapshot } from "@/audio/transport/audio-frame-clock";
+import type { RecordingInputController } from "@/audio/input/recording-input-controller";
 import { ko } from "@/lib/i18n/ko";
 
 export type AudioPhase = "idle" | "starting" | "ready" | "playing" | "suspended" | "stopping" | "close-error" | "error";
@@ -17,7 +18,7 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof AudioSetupError ? ko.audioErrors[error.code] : fallback;
 }
 
-export function useAudioSession(input: MicrophoneController, loop: StationController) {
+export function useAudioSession(input: MicrophoneController, loop: StationController, recording: RecordingInputController) {
   const engineRef = useRef<TestToneEngine | null>(null);
   const closingRef = useRef<TestToneEngine | null>(null);
   const operationRef = useRef(0);
@@ -105,7 +106,7 @@ export function useAudioSession(input: MicrophoneController, loop: StationContro
           if (engineRef.current !== engine) return;
           void closeAudio(engine, ko.audioErrors.processorFailed);
         },
-      }, input, loop);
+      }, input, loop, recording);
     } catch (error) {
       setPhase("error");
       setIssue(errorMessage(error, ko.audioErrors.startFailed));

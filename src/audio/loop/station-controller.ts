@@ -1,4 +1,4 @@
-import type { MicrophoneController } from "../input/microphone-controller";
+import type { CaptureInput } from "../input/capture-input";
 import { LoopPersistence, initialSaveState, type LoopSaveState } from "../storage/loop-persistence";
 import type { SessionRepository } from "../storage/loop-session";
 import { IndexedDbStationRepository, type StationProject } from "../storage/station-session";
@@ -34,7 +34,7 @@ export class StationController {
   private mixerDirty = false;
   private mixerCommitRequested = false;
 
-  constructor(private readonly input: MicrophoneController, repository: SessionRepository<StationProject> | null = new IndexedDbStationRepository()) {
+  constructor(private readonly input: CaptureInput, repository: SessionRepository<StationProject> | null = new IndexedDbStationRepository()) {
     this.persistence = new LoopPersistence(repository, (project) => {
       const history = project.tracks;
       const config = history.flatMap((track) => [track.current, track.cleared?.current]).find((take) => take)?.metadata;
@@ -52,7 +52,7 @@ export class StationController {
       getSave: () => this.persistence.snapshot,
       getActiveTrack: () => this.activeTrack,
       getRetainedBytes: () => this.tracks.reduce((sum, track) => sum + track.retainedBytes, 0),
-      memoryLimit: STATION_MEMORY_BYTES,
+      memoryLimit: STATION_MEMORY_BYTES - (input.reservedBytes ?? 0),
       getIssue: () => {
         const rate = this.context?.sampleRate;
         return rate && this.tracks.some((track) => {

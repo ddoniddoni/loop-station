@@ -1,4 +1,4 @@
-import type { MicrophoneController } from "../input/microphone-controller";
+import type { CaptureInput } from "../input/capture-input";
 import type { TransportSnapshot } from "../transport/audio-frame-clock";
 import { LoopHistory, type CachedLoop, type HistoryDirection, type LoopHistoryState } from "./loop-history";
 import { IndexedDbLoopRepository } from "../storage/indexed-db-loop-repository";
@@ -76,7 +76,7 @@ export class LoopController {
   private bufferReady = true;
   private unsubscribeInput: (() => void) | null = null;
 
-  constructor(private readonly input: MicrophoneController, repository: LoopRepository | null = new IndexedDbLoopRepository(), private readonly workspace?: LoopWorkspace) {
+  constructor(private readonly input: CaptureInput, repository: LoopRepository | null = new IndexedDbLoopRepository(), private readonly workspace?: LoopWorkspace) {
     this.persistence = new LoopPersistence(repository, (state) => this.hydrate(state), () => this.update({}));
     this.snapshot = { ...initialSnapshot, save: this.saveState };
   }
@@ -221,7 +221,7 @@ export class LoopController {
   private async prepareCapture(mode: CaptureMode): Promise<void> {
     if (!this.context || !this.node || !this.transport || !this.snapshot.connected) return;
     const input = this.input.getSnapshot();
-    if (!input.routed || input.phase !== "active") { this.update({ issue: "입력 설정에서 마이크를 먼저 연결하세요." }); return; }
+    if (!input.routed || input.phase !== "active") { this.update({ issue: "마이크를 연결하거나 내장 드럼을 준비하고 녹음 입력을 선택하세요." }); return; }
     const capture: PendingCapture = { mode, sequence: null, generation: ++this.generation };
     const node = this.node;
     const config = mode === "overdub" && this.history.current ? this.history.current.metadata : this.transport;
@@ -231,7 +231,7 @@ export class LoopController {
     try {
       const bytes = recordingCapacity(this.context.sampleRate, config, bars) * Float32Array.BYTES_PER_ELEMENT;
       if (bytes * 4 + this.history.retainedBytes * 2 > LOOP_MEMORY_BYTES) throw new Error("32MiB 작업 메모리가 부족합니다. 기존 루프와 복구 이력은 유지됩니다.");
-      if (this.workspace && bytes * 4 + this.workspace.getRetainedBytes() * 3 > this.workspace.memoryLimit) throw new Error("프로젝트의 128MiB 작업 메모리가 부족합니다. 다른 트랙과 복구 이력은 유지됩니다.");
+      if (this.workspace && bytes * 4 + this.workspace.getRetainedBytes() * 3 > this.workspace.memoryLimit) throw new Error("프로젝트 작업 메모리가 부족합니다. 다른 트랙과 복구 이력은 유지됩니다.");
       const storageNote = this.saveState.phase === "session" ? "저장 없이 연주 중입니다. 변경은 이 탭에만 남습니다." : await checkStorage(bytes + (this.workspace?.getRetainedBytes() ?? 0));
       if (capture.generation !== this.generation || node !== this.node) return;
       if (!this.snapshot.connected || !this.input.getSnapshot().routed) throw new Error("녹음 준비 중 입력 연결이 끊어졌습니다.");

@@ -2,18 +2,22 @@
 
 import { Button, Dialog, Flex, Heading, Text } from "@radix-ui/themes";
 import { useSyncExternalStore } from "react";
-import { useMicrophoneController } from "@/components/audio/audio-engine-provider";
+import { useMicrophoneController, useRecordingInputController } from "@/components/audio/audio-engine-provider";
 import { MicrophoneSetup } from "@/components/audio/microphone-setup";
 import { StudioIcon } from "@/components/ui/studio-icon";
 
 export function StudioInputPanel() {
   const controller = useMicrophoneController();
+  const recording = useRecordingInputController();
+  const source = useSyncExternalStore(recording.subscribe, recording.getSnapshot, recording.getServerSnapshot);
   const input = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getServerSnapshot);
   const peak = input.meter?.receiving ? input.meter.peak : null;
   const db = peak === null ? null : peak > 0 ? 20 * Math.log10(peak) : -60;
   return (
     <section className="station-inspector-section station-input-panel" aria-labelledby="input-routing-title">
       <Heading as="h3" id="input-routing-title" size="2">INPUT ROUTING &amp; PREAMP</Heading>
+      <Text as="p" size="1" role="status">녹음 입력: {source.source === "drums" ? "내장 드럼 · 마이크 소리는 녹음하지 않습니다." : "마이크"}</Text>
+      {source.source === "drums" && <Button variant="outline" color="gray" disabled={source.captureLocked || !input.audioReady} onClick={() => recording.select("microphone")}>마이크를 녹음 입력으로 사용</Button>}
       <div className="station-preamp">
         <div className="station-preamp-device"><span>Input Device</span><strong title={input.info?.label}>{input.info?.label || "마이크 미연결"}</strong></div>
         <div className="station-preamp-controls">

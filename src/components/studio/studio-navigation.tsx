@@ -3,7 +3,7 @@ import { StudioIcon, type StudioIconName } from "@/components/ui/studio-icon";
 export type StudioView = "tracks" | "library" | "mixer" | "fx" | "settings";
 const destinations: { id: StudioView; label: string; icon: StudioIconName }[] = [
   { id: "tracks", label: "Loops", icon: "loop" },
-  { id: "library", label: "Library", icon: "folder" },
+  { id: "library", label: "악기", icon: "folder" },
   { id: "mixer", label: "Mixer", icon: "mixer" },
   { id: "fx", label: "FX", icon: "wave" },
   { id: "settings", label: "Settings", icon: "settings" },

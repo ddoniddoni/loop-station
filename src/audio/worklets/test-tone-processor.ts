@@ -31,6 +31,8 @@ class TestToneProcessor extends AudioWorkletProcessor {
   private readonly inputMeter = new InputLevelMeter();
   private inputRevision = 0;
   private inputActive = false;
+  private captureSource: "microphone" | "drums" = "microphone";
+  private captureEnabled = true;
   private inputFramesSinceSnapshot = 0;
   private readonly phaseStep = (2 * Math.PI * 440) / sampleRate;
   private readonly envelopeStep = 1 / (sampleRate * 0.01);
@@ -40,7 +42,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
     this.port.onmessage = (event: MessageEvent<unknown>) => {
       const data = event.data;
       if (typeof data !== "object" || data === null || !("type" in data)) return;
-      this.loop.handle(data, this.blockFrames, this.inputActive);
+      this.loop.handle(data, this.blockFrames, this.captureEnabled && (this.captureSource === "drums" || this.inputActive));
       if (typeof data.type === "string" && data.type.startsWith("loop-")) this.transportDirty = true;
 
       if (data.type === "start") {
@@ -67,8 +69,14 @@ class TestToneProcessor extends AudioWorkletProcessor {
       } else if (data.type === "metronome-enable" && "enabled" in data && typeof data.enabled === "boolean") {
         this.metronomeEnabled = data.enabled;
         this.metronomeDirty = true;
-      } else if (data.type === "input-route" && "revision" in data && typeof data.revision === "number" && Number.isSafeInteger(data.revision) && "active" in data && typeof data.active === "boolean") {
+      } else if (data.type === "capture-route" && "source" in data && (data.source === "microphone" || data.source === "drums")
+        && "active" in data && typeof data.active === "boolean" && "revision" in data && Number.isSafeInteger(data.revision)) {
         this.loop.interrupt();
+        this.captureSource = data.source;
+        this.captureEnabled = data.active;
+        this.port.postMessage({ type: "capture-route-applied", revision: data.revision });
+      } else if (data.type === "input-route" && "revision" in data && typeof data.revision === "number" && Number.isSafeInteger(data.revision) && "active" in data && typeof data.active === "boolean") {
+        if (this.captureSource === "microphone") this.loop.interrupt();
         this.inputRevision = data.revision;
         this.inputActive = data.active;
         this.inputFramesSinceSnapshot = 0;
@@ -84,6 +92,8 @@ class TestToneProcessor extends AudioWorkletProcessor {
     const clickChannels = outputs[1];
     const input = this.inputActive ? inputs[0]?.[0] : undefined;
     const monitor = outputs[2]?.[0];
+    const drumInput = this.captureSource === "drums" && this.captureEnabled ? inputs[1]?.[0] : undefined;
+    const drumMonitor = outputs[4]?.[0];
     const loopLeft = outputs[3]?.[0];
     const loopRight = outputs[3]?.[1];
     const frameCount = channels?.[0]?.length ?? 0;
@@ -106,7 +116,11 @@ class TestToneProcessor extends AudioWorkletProcessor {
     for (let frame = 0; frame < frameCount; frame += 1) {
       const inputSample = input?.[frame];
       const sample = inputSample !== undefined && Number.isFinite(inputSample) ? inputSample : 0;
-      this.loop.nextSample(inputSample, blockPositionFrame + frame);
+      const drumSample = drumInput?.[frame] ?? 0;
+      const safeDrum = Number.isFinite(drumSample) ? Math.max(-1, Math.min(1, drumSample)) : 0;
+      const captureSample = !this.captureEnabled ? undefined : this.captureSource === "drums" ? safeDrum : inputSample;
+      this.loop.nextSample(captureSample, blockPositionFrame + frame);
+      if (drumMonitor && frame < drumMonitor.length) drumMonitor[frame] = safeDrum;
       if (loopLeft && frame < loopLeft.length) loopLeft[frame] = this.loop.left;
       if (loopRight && frame < loopRight.length) loopRight[frame] = this.loop.right;
       if (inputSample !== undefined) this.inputMeter.add(sample);

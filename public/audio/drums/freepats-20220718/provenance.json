@@ -1,0 +1,83 @@
+{
+  "source": "https://freepats.zenvoid.org/Percussion/electric-percussion.html",
+  "archive": "https://freepats.zenvoid.org/Percussion/SynthesizerPercussion/SynthesizerPercussion-SFZ-20220718.7z",
+  "archiveSha256": "dbb2e5bb8268022fffa6dcc3d11a93368316038bf3ae81a965c58e9d490ed23b",
+  "author": "Roberto (FreePats)",
+  "license": "CC0-1.0",
+  "retrieved": "2026-09-28",
+  "modifications": "Selected eight WAV files, unchanged. Playback gain and hi-hat choke implemented in application.",
+  "samples": [
+    {
+      "file": "Kick04.wav",
+      "sha256": "fe8bfae55a9838bfd71ab04685c8dcba7fda114bb85087acdb915641c39b390d",
+      "bytes": 32618,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 10858,
+      "sampleWidth": 3
+    },
+    {
+      "file": "Snare09.wav",
+      "sha256": "6d39ad1e54bb792a8bdfb47b98fffecc3d05d795e251116aaef310015ff82dca",
+      "bytes": 32006,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 10654,
+      "sampleWidth": 3
+    },
+    {
+      "file": "ClosedHiHat02-01.wav",
+      "sha256": "17c5f4c12eb4b8aecb29a3242cb8b141fbc4775e8d77639fb7be876658d208d0",
+      "bytes": 47012,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 15656,
+      "sampleWidth": 3
+    },
+    {
+      "file": "OpenHiHat02-01.wav",
+      "sha256": "a5558181f324b8cab6a0900c4aaa127c3ddd766163230d3aaa494a0b5e82768c",
+      "bytes": 58559,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 19505,
+      "sampleWidth": 3
+    },
+    {
+      "file": "Clap01.wav",
+      "sha256": "5a469c1e1072b210426e14ca2b020f27f1f4ce459fe116b0af837e4413e47742",
+      "bytes": 122924,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 40960,
+      "sampleWidth": 3
+    },
+    {
+      "file": "LowTom02-01.wav",
+      "sha256": "3a739daf27956f690e0aeb25e22257b96f5bda415cd31a6d27e679a9e0d49b4a",
+      "bytes": 77054,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 25670,
+      "sampleWidth": 3
+    },
+    {
+      "file": "Shaker04.wav",
+      "sha256": "693079ea17e19f7bfbc6322571d68d151189c9e55e4e373ee8eed08086deceb8",
+      "bytes": 8663,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 2873,
+      "sampleWidth": 3
+    },
+    {
+      "file": "Cymbal02.wav",
+      "sha256": "aec5c4bdb06822c9d9eadcf3f4ba0f4dc71550818d1d73553087c903df11cfdf",
+      "bytes": 267540,
+      "channels": 1,
+      "sampleRate": 48000,
+      "frames": 89165,
+      "sampleWidth": 3
+    }
+  ]
+}
