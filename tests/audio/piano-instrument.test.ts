@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PianoController } from "../../src/audio/instruments/piano-controller";
+import { MelodicController } from "../../src/audio/instruments/melodic-controller";
 import provenance from "../../public/audio/piano/freepats-20190703/provenance.json";
 
 function fixture() {
@@ -24,7 +24,7 @@ function fixture() {
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   } }));
   vi.stubGlobal("fetch", fetcher);
-  const piano = new PianoController(); piano.attach(context as unknown as AudioContext, {} as AudioWorkletNode);
+  const piano = new MelodicController(); piano.attach(context as unknown as AudioContext, {} as AudioWorkletNode);
   return { piano, context, voices, gains, fetcher };
 }
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });

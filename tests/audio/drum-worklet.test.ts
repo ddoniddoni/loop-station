@@ -24,7 +24,7 @@ async function fixture() {
 }
 
 describe("actual processor instrument routing", () => {
-  it.each(["drums", "piano"] as const)("captures only %s PCM, excludes other inputs and click, and survives microphone disconnection", async (source) => {
+  it.each(["drums", "piano", "guitar"] as const)("captures only %s PCM, excludes other inputs and click, and survives microphone disconnection", async (source) => {
     const f = await fixture();
     f.send({ type: "input-route", revision: 1, active: true });
     f.send({ type: "capture-route", revision: 1, source, active: true });
@@ -40,7 +40,7 @@ describe("actual processor instrument routing", () => {
     const captured = f.messages.find((data) => typeof data === "object" && data !== null && "type" in data && data.type === "loop-captured");
     expect(captured).toMatchObject({ captureMode: "record", metadata: { complete: true, frames: 16000 } });
     if (!captured || typeof captured !== "object" || !("pcm" in captured) || !(captured.pcm instanceof ArrayBuffer)) throw new Error("No captured PCM");
-    expect(Array.from(new Float32Array(captured.pcm).slice(0, 16000)).every((value) => value === (source === "piano" ? -0.125 : 0.25))).toBe(true);
+    expect(Array.from(new Float32Array(captured.pcm).slice(0, 16000)).every((value) => value === (source === "drums" ? 0.25 : -0.125))).toBe(true);
   });
   it("mutes drum audition when microphone is selected and keeps microphone monitoring separate", async () => {
     const f = await fixture(); f.send({ type: "input-route", revision: 1, active: true });

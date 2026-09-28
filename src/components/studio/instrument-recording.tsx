@@ -25,14 +25,14 @@ function InstrumentRecordingAction({ trackId, state, ready, busy, label }: { tra
       </div> : <Button variant="outline" disabled={!ready} onClick={() => void track.record()}>{label} {state.recordBars}마디 녹음</Button>}</>;
 }
 
-export function InstrumentRecording({ trackId, onTrackChange, source }: { trackId: number; onTrackChange: (id: number) => void; source: "drums" | "piano" }) {
+export function InstrumentRecording({ trackId, onTrackChange, source }: { trackId: number; onTrackChange: (id: number) => void; source: "drums" | "piano" | "guitar" }) {
   const track = useLoopController(trackId);
   const recording = useRecordingInputController();
   const state = useSyncExternalStore(track.subscribe, track.getSnapshot, track.getServerSnapshot);
   const input = useSyncExternalStore(recording.subscribe, recording.getSnapshot, recording.getServerSnapshot);
   const busy = workspaceBlocksTrack(state) || state.historyPending !== null;
   const ready = state.connected && input.source === source && input.routed && !busy;
-  const label = source === "piano" ? "피아노" : "드럼";
+  const label = source === "piano" ? "피아노" : source === "guitar" ? "기타" : "드럼";
   const message = recordingMessage(state);
   const id = useId();
   return <div className="station-drum-recording">

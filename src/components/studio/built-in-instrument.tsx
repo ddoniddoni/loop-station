@@ -5,7 +5,7 @@ import { useSyncExternalStore, type KeyboardEvent } from "react";
 import { DRUM_KIT, type DrumId } from "@/audio/instruments/drum-kit";
 import { useAudioSessionContext, useRecordingInputController } from "@/components/audio/audio-engine-provider";
 import { InstrumentRecording } from "./instrument-recording";
-import { PianoInstrument } from "./piano-instrument";
+import { MelodicInstrument } from "./melodic-instrument";
 
 const codes = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyJ", "KeyK", "KeyL", "Semicolon"];
 
@@ -48,11 +48,12 @@ export function BuiltInInstrument({ trackId, onTrackChange }: { trackId: number;
       <div className="station-drum-source" role="group" aria-label="녹음 입력 선택">
         <Button variant="outline" color="gray" aria-pressed={input.source === "microphone"} disabled={!audioReady || input.captureLocked} onClick={() => recording.select("microphone")}>마이크</Button>
         <Button variant="outline" aria-pressed={input.source === "drums"} disabled={!audioReady || input.captureLocked} onClick={prepare}>내장 드럼</Button>
-        <Button variant="outline" aria-pressed={input.source === "piano"} disabled={!audioReady || input.captureLocked} onClick={() => { recording.select("piano"); void recording.piano.load(); }}>피아노</Button>
+        <Button variant="outline" aria-pressed={input.source === "piano"} disabled={!audioReady || input.captureLocked} onClick={() => { recording.select("piano"); void recording.melodic.load(); }}>피아노</Button>
+        <Button variant="outline" aria-pressed={input.source === "guitar"} disabled={!audioReady || input.captureLocked} onClick={() => { recording.select("guitar"); void recording.melodic.load(); }}>기타</Button>
       </div>
       <AudioPreparation />
       {audio.issue && <Text as="p" size="1" role="status">{audio.issue}</Text>}
-      {input.source === "piano" ? <PianoInstrument trackId={trackId} onTrackChange={onTrackChange} /> : <>
+      {input.source === "piano" || input.source === "guitar" ? <MelodicInstrument trackId={trackId} onTrackChange={onTrackChange} /> : <>
       <DrumPreparation />
       <Text as="p" size="1" role="status">{drums.issue ?? audio.issue ?? (canPlay ? "연주 준비됨 · 마이크 권한 없이 사용" : input.source === "microphone" ? "녹음 입력: 마이크 · 드럼을 선택하면 패드가 켜집니다." : "음원과 오디오 연결을 준비하고 있습니다.")}</Text>
       <div className="station-drum-pads" role="group" aria-label="드럼 패드">

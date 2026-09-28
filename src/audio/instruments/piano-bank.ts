@@ -1,8 +1,6 @@
 import provenance from "../../../public/audio/piano/freepats-20190703/provenance.json";
 
 export const PIANO_ASSET_PATH = "/audio/piano/freepats-20190703/";
-// Largest bank: 21.8MB decoded at 192kHz. Reserve includes decode/copy overhead.
-export const PIANO_MEMORY_BYTES = 48 * 1024 * 1024;
 export const PIANO_RELEASE = 0.6;
 export type PianoOctave = 3 | 4 | 5;
 export function pianoBank(octave: PianoOctave) {

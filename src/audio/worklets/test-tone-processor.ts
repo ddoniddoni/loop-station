@@ -31,7 +31,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
   private readonly inputMeter = new InputLevelMeter();
   private inputRevision = 0;
   private inputActive = false;
-  private captureSource: "microphone" | "drums" | "piano" = "microphone";
+  private captureSource: "microphone" | "drums" | "piano" | "guitar" = "microphone";
   private captureEnabled = true;
   private inputFramesSinceSnapshot = 0;
   private readonly phaseStep = (2 * Math.PI * 440) / sampleRate;
@@ -69,7 +69,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
       } else if (data.type === "metronome-enable" && "enabled" in data && typeof data.enabled === "boolean") {
         this.metronomeEnabled = data.enabled;
         this.metronomeDirty = true;
-      } else if (data.type === "capture-route" && "source" in data && (data.source === "microphone" || data.source === "drums" || data.source === "piano")
+      } else if (data.type === "capture-route" && "source" in data && (data.source === "microphone" || data.source === "drums" || data.source === "piano" || data.source === "guitar")
         && "active" in data && typeof data.active === "boolean" && "revision" in data && Number.isSafeInteger(data.revision)) {
         this.loop.interrupt();
         this.captureSource = data.source;
@@ -92,7 +92,7 @@ class TestToneProcessor extends AudioWorkletProcessor {
     const clickChannels = outputs[1];
     const input = this.inputActive ? inputs[0]?.[0] : undefined;
     const monitor = outputs[2]?.[0];
-    const instrumentInput = this.captureSource !== "microphone" && this.captureEnabled ? inputs[this.captureSource === "piano" ? 2 : 1]?.[0] : undefined;
+    const instrumentInput = this.captureSource !== "microphone" && this.captureEnabled ? inputs[this.captureSource === "drums" ? 1 : 2]?.[0] : undefined;
     const instrumentMonitor = outputs[4]?.[0];
     const loopLeft = outputs[3]?.[0];
     const loopRight = outputs[3]?.[1];

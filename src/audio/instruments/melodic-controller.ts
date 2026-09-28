@@ -1,11 +1,11 @@
-import { pianoBank, PIANO_ASSET_PATH, PIANO_MEMORY_BYTES, PIANO_RELEASE, type PianoOctave } from "./piano-bank";
+import { melodicBank, melodicBase, MELODIC_INSTRUMENTS, MELODIC_MEMORY_BYTES, type MelodicInstrument } from "./melodic-bank";
 
-type Snapshot = { phase: "idle" | "loading" | "ready" | "error"; running: boolean; octave: PianoOctave; sustain: boolean; notes: number[]; issue: string | null };
+type Snapshot = { phase: "idle" | "loading" | "ready" | "error"; running: boolean; instrument: MelodicInstrument; octave: number; sustain: boolean; notes: number[]; issue: string | null };
 type Voice = { token: string; note: number; source: AudioBufferSourceNode; gain: GainNode; held: boolean; releasing: boolean };
-const initial: Snapshot = { phase: "idle", running: false, octave: 4, sustain: false, notes: [], issue: null };
+const initial: Snapshot = { phase: "idle", running: false, instrument: "piano", octave: 4, sustain: false, notes: [], issue: null };
 
 /** One bank, bounded polyphony, and audio-clock envelopes; no PCM in React. */
-export class PianoController {
+export class MelodicController {
   private snapshot = initial;
   private listeners = new Set<() => void>();
   private context: AudioContext | null = null;
@@ -30,9 +30,18 @@ export class PianoController {
     this.silence.connect(this.bus); this.silence.start();
     this.setRunning(context.state === "running");
   }
+  selectInstrument(instrument: MelodicInstrument): void {
+    if (this.captureLocked || instrument === this.snapshot.instrument) return;
+    this.unload();
+    this.update({ instrument, octave: MELODIC_INSTRUMENTS[instrument].defaultOctave });
+  }
+  unload(): void {
+    this.cancelLoad(); this.stopAll(); this.enabled = false; this.buffers.clear();
+    this.update({ phase: "idle", issue: null });
+  }
   setCaptureLocked(locked: boolean): void { this.captureLocked = locked; }
-  async setOctave(octave: PianoOctave): Promise<void> {
-    if (this.captureLocked || ![3, 4, 5].includes(octave) || octave === this.snapshot.octave) return;
+  async setOctave(octave: number): Promise<void> {
+    if (this.captureLocked || !MELODIC_INSTRUMENTS[this.snapshot.instrument].octaves.some((value) => value === octave) || octave === this.snapshot.octave) return;
     this.cancelLoad(); this.stopAll(); this.buffers.clear();
     this.update({ octave, phase: "idle", issue: null });
     await this.load();
@@ -45,16 +54,17 @@ export class PianoController {
     const context = this.context;
     if (!context || this.request || this.snapshot.phase === "ready" || this.captureLocked) return;
     const request = new AbortController(); this.request = request;
-    const bank = pianoBank(this.snapshot.octave);
+    const config = MELODIC_INSTRUMENTS[this.snapshot.instrument];
+    const bank = melodicBank(this.snapshot.instrument, this.snapshot.octave);
     this.update({ phase: "loading", issue: null });
     let rejectAbort!: (reason: Error) => void;
     const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
-    const onAbort = () => rejectAbort(new Error("피아노 준비 시간이 초과되었습니다. 다시 시도하세요."));
+    const onAbort = () => rejectAbort(new Error(`${config.label} 준비 시간이 초과되었습니다. 다시 시도하세요.`));
     request.signal.addEventListener("abort", onAbort, { once: true });
     const timeout = setTimeout(() => request.abort(), 15_000);
     const current = () => !request.signal.aborted && this.request === request && this.context === context;
     try {
-      if (context.sampleRate > 192_000) throw new Error("피아노는 192kHz 이하 오디오에서 사용할 수 있습니다.");
+      if (context.sampleRate > 192_000) throw new Error(`${config.label}: 192kHz 이하 오디오에서 사용할 수 있습니다.`);
       const loading = async () => {
         // A cancelled browser decoder cannot be aborted. Wait before starting another bank.
         if (this.pendingDecode) await this.pendingDecode.catch(() => undefined);
@@ -63,20 +73,20 @@ export class PianoController {
         // Serial decoding bounds transient memory even across cancellation and retry.
         for (const metadata of bank) {
           if (!current()) throw new Error("취소됨");
-          const response = await fetch(PIANO_ASSET_PATH + encodeURIComponent(metadata.file), { signal: request.signal });
-          if (!response.ok) throw new Error("피아노 음원을 불러오지 못했습니다. 다시 시도하세요.");
+          const response = await fetch(config.assetPath + encodeURIComponent(metadata.file), { signal: request.signal });
+          if (!response.ok) throw new Error("음원을 불러오지 못했습니다. 다시 시도하세요.");
           const encoded = await response.arrayBuffer();
-          if (encoded.byteLength !== metadata.bytes) throw new Error("피아노 음원 파일 크기가 올바르지 않습니다.");
+          if (encoded.byteLength !== metadata.bytes) throw new Error("음원 파일 크기가 올바르지 않습니다.");
           const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", encoded)), (byte) => byte.toString(16).padStart(2, "0")).join("");
-          if (hash !== metadata.sha256) throw new Error("피아노 음원의 무결성을 확인하지 못했습니다.");
+          if (hash !== metadata.sha256) throw new Error("음원의 무결성을 확인하지 못했습니다.");
           if (!current()) throw new Error("취소됨");
           const decoding = context.decodeAudioData(encoded); this.pendingDecode = decoding;
           let buffer: AudioBuffer;
           try { buffer = await decoding; } finally { if (this.pendingDecode === decoding) this.pendingDecode = null; }
           if (!current()) throw new Error("취소됨");
-          if (buffer.numberOfChannels !== 1 || Math.abs(buffer.duration - metadata.frames / metadata.sampleRate) > 0.01) throw new Error("지원하지 않는 피아노 음원 형식입니다.");
+          if (buffer.numberOfChannels !== 1 || Math.abs(buffer.duration - metadata.frames / metadata.sampleRate) > 0.01) throw new Error("지원하지 않는 악기 음원 형식입니다.");
           bytes += buffer.length * 4;
-          if (bytes > PIANO_MEMORY_BYTES / 2) throw new Error("피아노 음원이 메모리 한도를 넘었습니다.");
+          if (bytes > MELODIC_MEMORY_BYTES / 2) throw new Error("악기 음원이 메모리 한도를 넘었습니다.");
           entries.set(metadata.file, buffer);
         }
         return entries;
@@ -85,7 +95,7 @@ export class PianoController {
       if (!current()) return;
       this.buffers = entries; this.update({ phase: "ready", issue: null });
     } catch (error) {
-      if (this.request === request) this.update({ phase: "error", issue: error instanceof Error ? error.message : "피아노 준비에 실패했습니다." });
+      if (this.request === request) this.update({ phase: "error", issue: error instanceof Error ? error.message : "악기 준비에 실패했습니다." });
     } finally {
       request.signal.removeEventListener("abort", onAbort); request.abort(); clearTimeout(timeout);
       if (this.request === request) this.request = null;
@@ -96,11 +106,11 @@ export class PianoController {
 
   noteOn(note: number, token: string, velocity = 0.8): boolean {
     const context = this.context;
-    const low = (this.snapshot.octave + 1) * 12;
+    const low = melodicBase(this.snapshot.instrument, this.snapshot.octave);
     if (!context || !this.bus || !this.enabled || !this.snapshot.running || context.state !== "running" || this.snapshot.phase !== "ready"
       || !Number.isInteger(note) || note < low || note > low + 12 || !Number.isFinite(velocity) || velocity <= 0) return false;
     if ([...this.voices].some((voice) => voice.token === token && voice.held)) return false;
-    const metadata = pianoBank(this.snapshot.octave).find((sample) => sample.low <= note && sample.high >= note);
+    const metadata = melodicBank(this.snapshot.instrument, this.snapshot.octave).find((sample) => sample.low <= note && sample.high >= note);
     const buffer = metadata && this.buffers.get(metadata.file);
     if (!metadata || !buffer) return false;
     if (this.voices.size >= 16) { const oldest = this.voices.values().next().value; if (oldest) this.stopVoice(oldest); }
@@ -123,7 +133,7 @@ export class PianoController {
     this.publishNotes();
   }
   setSustain(sustain: boolean): void {
-    if (!this.enabled || sustain === this.snapshot.sustain) return;
+    if (!this.enabled || !MELODIC_INSTRUMENTS[this.snapshot.instrument].sustain || sustain === this.snapshot.sustain) return;
     this.update({ sustain });
     if (!sustain) for (const voice of this.voices) if (!voice.held) this.releaseNote(voice);
   }
@@ -132,8 +142,8 @@ export class PianoController {
     voice.releasing = true;
     const now = this.context.currentTime;
     voice.gain.gain.setValueAtTime(voice.gain.gain.value, now);
-    voice.gain.gain.linearRampToValueAtTime(0, now + PIANO_RELEASE);
-    voice.source.stop(now + PIANO_RELEASE);
+    voice.gain.gain.linearRampToValueAtTime(0, now + MELODIC_INSTRUMENTS[this.snapshot.instrument].release);
+    voice.source.stop(now + MELODIC_INSTRUMENTS[this.snapshot.instrument].release);
   }
   stopAll(): void {
     for (const voice of this.voices) this.stopVoice(voice);
