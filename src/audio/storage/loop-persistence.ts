@@ -131,6 +131,11 @@ export class LoopPersistence<State = LoopHistoryState> {
     if (this.replacing || this.operation || (this.state.phase !== "error" && this.state.phase !== "conflict")) return;
     this.set({ phase: "session", issue: "이 탭의 변경은 저장하지 않습니다. 새로고침하면 마지막 저장본으로 돌아갑니다.", editLocked: false, canRetry: false });
   }
+  markExternalChange(): void {
+    if (this.state.phase === "session") return;
+    this.externalChange = true;
+    if (!this.operation) this.conflict();
+  }
   listen(): () => void {
     if (!this.repository || typeof BroadcastChannel === "undefined") return () => {};
     let channel: BroadcastChannel;
@@ -139,9 +144,8 @@ export class LoopPersistence<State = LoopHistoryState> {
     this.channel = channel;
     channel.onmessage = (event: MessageEvent<unknown>) => {
       if (this.channel !== channel || typeof event.data !== "string" || event.data === this.revision || this.state.phase === "session") return;
-      this.externalChange = true;
       // Finish an in-flight transaction first, then expose its actual outcome.
-      if (!this.operation) this.conflict();
+      this.markExternalChange();
     };
     return () => {
       channel.close();

@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Flex, Heading, Text } from "@radix-ui/themes";
+import { Badge, Button, Flex, Heading, Tabs, Text } from "@radix-ui/themes";
 import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import type { ProjectSummary } from "@/audio/storage/project-catalog";
@@ -8,6 +8,7 @@ import { useAudioSessionContext, useProjectManager, useStationController } from 
 import { StudioIcon } from "@/components/ui/studio-icon";
 import { ProjectEditor } from "./project-editor";
 import { ProjectDuplicate } from "./project-duplicate";
+import { ProjectTrash, ProjectTrashList } from "./project-trash";
 import { currentProjectStatus } from "./loop-save-label";
 import { useStudioView } from "./studio-view-provider";
 
@@ -37,10 +38,29 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
         <div><dt>템포·박자</dt><dd>{project.transport.bpm} BPM · {project.transport.numerator}/{project.transport.denominator}</dd></div>
         <div><dt>마지막 수정</dt><dd>{project.updatedAtLabel}</dd></div>
       </dl>
-      <Flex gap="2" wrap="wrap"><Button disabled={disabled} title={!active ? station.projectChangeReason ?? undefined : undefined} onClick={() => void open()}>{active ? "작업 이어하기" : "프로젝트 열기"}</Button><ProjectEditor project={project} /><ProjectDuplicate project={project} /></Flex>
+      <Flex gap="2" wrap="wrap"><Button disabled={disabled} title={!active ? station.projectChangeReason ?? undefined : undefined} onClick={() => void open()}>{active ? "작업 이어하기" : "프로젝트 열기"}</Button><ProjectEditor project={project} /><ProjectDuplicate project={project} /><ProjectTrash project={project} /></Flex>
       {issue && <Text as="p" role="alert" size="2" color="red" mt="2">{issue}</Text>}
     </div>
   </article>;
+}
+
+function ProjectCollections() {
+  const manager = useProjectManager();
+  const state = useSyncExternalStore(manager.subscribe, manager.getSnapshot, manager.getServerSnapshot);
+  return <Tabs.Root defaultValue="active" className="station-project-collections">
+    <Tabs.List aria-label="프로젝트 분류">
+      <Tabs.Trigger value="active">보관 중 ({state.projects.length})</Tabs.Trigger>
+      <Tabs.Trigger value="trash">휴지통 ({state.trashed.length})</Tabs.Trigger>
+    </Tabs.List>
+    <Tabs.Content value="active">
+      {state.projects.length === 0 && <div className="station-projects-empty">
+        <StudioIcon name="folder" size={32} /><Heading as="h2" size="5" mt="3">보관 중인 프로젝트가 없습니다</Heading>
+        <Text as="p" size="2" color="gray" mt="2">새 프로젝트를 만들거나 휴지통에서 이전 작업을 복구하세요. 스튜디오의 빈 작업은 녹음·설정이 저장되면 목록에 나타납니다.</Text>
+      </div>}
+      <div className="station-project-list">{state.projects.map((project) => <ProjectCard key={project.id} project={project} />)}</div>
+    </Tabs.Content>
+    <Tabs.Content value="trash"><ProjectTrashList /></Tabs.Content>
+  </Tabs.Root>;
 }
 
 export function MyProjects() {
@@ -60,13 +80,10 @@ export function MyProjects() {
     {reason && state.phase === "ready" && <Text as="p" role="status" size="2" mt="3">{reason} 현재 저장 상태는 상단 LOCAL에서 확인하세요.</Text>}
     {state.issue && <div className="station-projects-notice" role="alert"><Heading as="h2" size="3">프로젝트 작업을 완료하지 못했습니다</Heading><Text as="p" size="2" mt="2">{state.issue}</Text>{state.phase === "error" && <Button mt="3" onClick={() => manager.useSessionOnly()}>저장 없이 연주하기</Button>}</div>}
     {state.selectionIssue && <Text as="p" size="2" role="status" mt="3">{state.selectionIssue}</Text>}
+    {state.notice && <Text as="p" size="2" role="status" mt="3">{state.notice}</Text>}
     {state.phase === "loading" && <Text as="p" className="station-projects-empty" role="status">프로젝트 목록을 불러오고 있습니다…</Text>}
-    {state.phase === "ready" && state.projects.length === 0 && <div className="station-projects-empty">
-      <StudioIcon name="folder" size={32} /><Heading as="h2" size="5" mt="3">아직 저장된 프로젝트가 없습니다</Heading>
-      <Text as="p" size="2" color="gray" mt="2">새 프로젝트를 만들어 시작하세요. 기존 스튜디오에서 녹음한 작업도 저장되면 여기에 표시됩니다.</Text>
-    </div>}
     {current.save.issue && state.phase === "ready" && <Text as="p" role="status" size="2" mt="3">{current.save.issue}</Text>}
-    <div className="station-project-list">{state.projects.map((project) => <ProjectCard key={project.id} project={project} />)}</div>
-    <Text as="p" size="2" color="gray" mt="5">복제본도 이 브라우저에 저장되며 외부 백업을 대신하지 않습니다. 브라우저 데이터 삭제 시 원본과 사본이 함께 사라집니다. 파일 백업·휴지통과 삭제는 아직 준비 중입니다.</Text>
+    {state.phase === "ready" && <ProjectCollections />}
+    <Text as="p" size="2" color="gray" mt="5">휴지통과 복제본은 외부 백업을 대신하지 않습니다. 브라우저 데이터를 지우면 보관 중인 작업과 휴지통도 함께 사라집니다. 파일 백업은 준비 중입니다.</Text>
   </section>;
 }

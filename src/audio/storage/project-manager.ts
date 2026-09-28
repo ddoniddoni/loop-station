@@ -5,12 +5,13 @@ import type { SavedStationSession } from "./station-session";
 
 const SELECTION = "loop-station-active-project";
 export const PROJECT_CHANNEL = "loop-station-project-catalog";
-type ProjectOperation = "create" | "open" | "rename" | "duplicate" | null;
+type ProjectOperation = "create" | "open" | "rename" | "duplicate" | "trash" | "restore" | null;
 export type ProjectManagerSnapshot = {
   phase: "loading" | "ready" | "error"; projects: readonly ProjectSummary[];
+  trashed: readonly ProjectSummary[]; notice: string | null;
   activeId: string; operation: ProjectOperation; issue: string | null; selectionIssue: string | null;
 };
-const initial: ProjectManagerSnapshot = { phase: "loading", projects: [], activeId: LEGACY_PROJECT_ID, operation: null, issue: null, selectionIssue: null };
+const initial: ProjectManagerSnapshot = { phase: "loading", projects: [], trashed: [], notice: null, activeId: LEGACY_PROJECT_ID, operation: null, issue: null, selectionIssue: null };
 function message(error: unknown): string {
   if (error instanceof Error && error.name === "QuotaExceededError") return "저장 공간이 부족합니다. 기존 프로젝트는 유지됩니다.";
   return error instanceof Error ? error.message : "프로젝트 작업에 실패했습니다. 기존 작업은 유지됩니다.";
@@ -71,16 +72,22 @@ export class ProjectManager {
     this.update({ phase: "loading", issue: null });
     try {
       await this.catalog.registerLegacy();
-      const projects = await this.catalog.list();
+      const all = await this.catalog.list(true);
+      const projects = all.filter((project) => project.deletedAt === undefined);
+      const trashed = all.filter((project) => project.deletedAt !== undefined);
+      // Keep detecting a damaged legacy session instead of silently hiding it
+      // behind a new empty workspace. A registered tombstone must never be opened.
+      if (!projects.length && !all.some((project) => project.id === LEGACY_PROJECT_ID)) await new ProjectRepository(LEGACY_PROJECT_ID).load();
       let remembered: string | null = null;
       try { remembered = globalThis.sessionStorage?.getItem(SELECTION); } catch { /* Fall back to the most recently updated project. */ }
+      const fallback = projects[0]?.id ?? (trashed.some((project) => project.id === LEGACY_PROJECT_ID) ? `loop-${crypto.randomUUID()}` : LEGACY_PROJECT_ID);
       const id = isProjectId(remembered) && projects.some((project) => project.id === remembered)
-        ? remembered : projects[0]?.id ?? LEGACY_PROJECT_ID;
+        ? remembered : fallback;
       if (!this.station.beginProjectChange(true)) throw new Error("현재 저장 작업이 끝난 뒤 다시 시도하세요.");
       const repository = new ProjectRepository(id);
-      const saved = await repository.load();
+      const saved = projects.length ? await repository.load() : null;
       this.station.adoptProject(repository, saved);
-      this.update({ phase: "ready", projects, activeId: id });
+      this.update({ phase: "ready", projects, trashed, activeId: id });
       this.bindStorage();
       this.remember(id);
     } catch (error) {
@@ -97,8 +104,15 @@ export class ProjectManager {
     const sequence = ++this.listSequence;
     try {
       await this.catalog.registerLegacy();
-      const projects = await this.catalog.list();
-      if (sequence === this.listSequence) this.update({ projects, ...(clearIssue ? { issue: null } : {}) });
+      const all = await this.catalog.list(true);
+      if (sequence !== this.listSequence) return;
+      const projects = all.filter((project) => project.deletedAt === undefined);
+      const trashed = all.filter((project) => project.deletedAt !== undefined);
+      this.update({ projects, trashed, ...(clearIssue ? { issue: null } : {}) });
+      if (!this.snapshot.operation && trashed.some((project) => project.id === this.snapshot.activeId)) {
+        this.station.invalidateProject();
+        this.update({ issue: "현재 프로젝트가 휴지통으로 이동했습니다. 이 탭의 녹음은 유지하지만 덮어쓰지 않습니다. 저장되지 않은 작업을 확인한 뒤 새로고침하고 휴지통에서 복구하세요." });
+      }
     } catch (error) {
       if (sequence === this.listSequence) this.update({ issue: message(error) });
     }
@@ -114,16 +128,16 @@ export class ProjectManager {
     return true;
   }
   private async change(operation: "create" | "open" | "duplicate", stopAudio: () => Promise<boolean>,
-    prepare: () => Promise<{ id: string; saved: SavedStationSession }>): Promise<boolean> {
+    prepare: () => Promise<{ id: string; saved: SavedStationSession; repository?: ProjectRepository }>): Promise<boolean> {
     if (!this.canChange() || !this.station.beginProjectChange()) return false;
-    this.update({ operation, issue: null });
+    this.update({ operation, issue: null, notice: null });
     let prepared = false;
     try {
       if (!await stopAudio()) throw new Error("오디오 종료에 실패했습니다. 상단 AUDIO에서 종료를 재시도한 뒤 다시 여세요.");
-      const { id, saved } = await prepare();
+      const { id, saved, repository } = await prepare();
       prepared = true;
       this.stopStorage?.(); this.stopStorage = null;
-      this.station.adoptProject(new ProjectRepository(id), saved);
+      this.station.adoptProject(repository ?? new ProjectRepository(id), saved);
       this.bindStorage();
       this.update({ activeId: id });
       this.remember(id);
@@ -156,9 +170,10 @@ export class ProjectManager {
   open(id: string, stopAudio: () => Promise<boolean>): Promise<boolean> {
     if (id === this.snapshot.activeId) return Promise.resolve(this.snapshot.phase === "ready" && !this.snapshot.operation);
     return this.change("open", stopAudio, async () => {
-      const saved = await new ProjectRepository(id).load();
+      const repository = new ProjectRepository(id);
+      const saved = await repository.load();
       if (!saved) throw new Error("프로젝트를 찾을 수 없습니다. 목록을 새로고침하세요.");
-      return { id, saved };
+      return { id, saved, repository };
     });
   }
   async rename(project: ProjectSummary, title: string): Promise<boolean> {
@@ -170,5 +185,37 @@ export class ProjectManager {
       return true;
     } catch (error) { this.update({ issue: message(error) }); return false; }
     finally { this.update({ operation: null }); await this.refresh(); }
+  }
+  trash(project: ProjectSummary, stopAudio: () => Promise<boolean>): Promise<boolean> {
+    return this.changeTrash(project, true, stopAudio);
+  }
+  restore(project: ProjectSummary): Promise<boolean> { return this.changeTrash(project, false); }
+  private async changeTrash(project: ProjectSummary, trashed: boolean, stopAudio?: () => Promise<boolean>): Promise<boolean> {
+    if (!this.canChange() || !this.station.beginProjectChange()) return false;
+    this.update({ operation: trashed ? "trash" : "restore", issue: null, notice: null });
+    const active = trashed && project.id === this.snapshot.activeId;
+    let committed = false;
+    try {
+      if (active && !await stopAudio?.()) throw new Error("오디오 종료에 실패했습니다. AUDIO에서 종료를 재시도한 뒤 휴지통으로 옮기세요.");
+      await this.catalog.setTrashed(project, trashed);
+      committed = true;
+      if (active) {
+        const id = `loop-${crypto.randomUUID()}`;
+        this.stopStorage?.(); this.stopStorage = null;
+        this.station.adoptProject(new ProjectRepository(id), null);
+        this.update({ activeId: id }); this.remember(id);
+      }
+      this.update({ notice: trashed
+        ? "휴지통으로 옮겼습니다. 녹음은 보존되며 휴지통에서 복구할 수 있습니다."
+        : "프로젝트를 복구했습니다. 보관 중 목록에서 열어주세요. 같은 이름의 다른 프로젝트는 변경하지 않았습니다." });
+      return true;
+    } catch (error) {
+      this.update({ issue: committed ? `휴지통 변경은 저장됐지만 화면 전환에 실패했습니다. 새로고침 후 목록을 확인하세요. ${message(error)}` : message(error) });
+      return false;
+    } finally {
+      if (committed) this.announce();
+      this.station.cancelProjectChange(); this.bindStorage();
+      this.update({ operation: null }); await this.refresh();
+    }
   }
 }

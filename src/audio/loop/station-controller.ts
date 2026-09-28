@@ -79,6 +79,7 @@ export class StationController {
   get dirty(): boolean { return this.mixerDirty || this.persistence.dirty || this.tracks.some((track) => track.performing); }
   initializeStorage(): Promise<void> { return this.persistence.initialize(); }
   listenForStorageChanges(): () => void { return this.persistence.listen(); }
+  invalidateProject(): void { this.persistence.markExternalChange(); }
   retryStorage(): Promise<void> { return this.snapshot.performing ? Promise.resolve() : this.persistence.retry(); }
   useSessionOnly(): void { if (!this.snapshot.performing) this.persistence.useSessionOnly(); }
   failProjectInitialization(error: unknown): void { this.persistence.failInitialization(error); }

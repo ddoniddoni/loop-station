@@ -11,8 +11,9 @@ export type ProjectSummary = {
   id: string; title: string; revision: string; audioRevision: string;
   createdAt: number; updatedAt: number; updatedAtLabel: string;
   clipCount: number; transport: TransportConfig;
+  deletedAt?: number;
 };
-type ProjectRecord = Omit<ProjectSummary, "updatedAtLabel"> & { version: 1 };
+type ProjectRecord = Omit<ProjectSummary, "updatedAtLabel"> & { version: 1; lifecycleRevision?: string };
 
 export function projectTitle(value: string): string {
   const title = value.trim();
@@ -32,6 +33,8 @@ function record(value: unknown): ProjectRecord {
     || !("clipCount" in value) || !Number.isInteger(value.clipCount) || Number(value.clipCount) < 0 || Number(value.clipCount) > 8
     || !("transport" in value) || !isTransportConfig(value.transport)) throw new LoopStorageError("corrupt", "프로젝트 목록 정보를 읽을 수 없습니다. 저장본은 보존됩니다.");
   if (projectTitle(value.title) !== value.title) throw new LoopStorageError("corrupt", "프로젝트 이름이 올바르지 않습니다.");
+  if ("deletedAt" in value && value.deletedAt !== undefined && (!Number.isSafeInteger(value.deletedAt) || Number(value.deletedAt) < 0)) throw new LoopStorageError("corrupt", "휴지통 정보를 읽을 수 없습니다. 저장본은 보존됩니다.");
+  if ("lifecycleRevision" in value && value.lifecycleRevision !== undefined && (typeof value.lifecycleRevision !== "string" || !value.lifecycleRevision || value.lifecycleRevision.length > 64)) throw new LoopStorageError("corrupt", "프로젝트 복구 리비전이 올바르지 않습니다.");
   return value as ProjectRecord;
 }
 function summary(value: ProjectRecord): ProjectSummary {
@@ -39,11 +42,17 @@ function summary(value: ProjectRecord): ProjectSummary {
 }
 function describe(id: string, title: string, saved: SavedStationSession, previous?: ProjectRecord): ProjectRecord {
   return { version: 1, id, title, revision: crypto.randomUUID(), audioRevision: saved.revision,
-    createdAt: previous?.createdAt ?? saved.updatedAt, updatedAt: saved.updatedAt,
+    createdAt: previous?.createdAt ?? saved.updatedAt, updatedAt: saved.updatedAt, lifecycleRevision: previous?.lifecycleRevision,
     clipCount: saved.history.tracks.filter((track) => track.current !== null).length, transport: projectTransport(saved.history) };
 }
 function conflict(): Error {
   return new LoopStorageError("conflict", "다른 탭에서 프로젝트가 변경되었습니다. 목록을 새로고침한 뒤 다시 시도하세요. 현재 작업은 유지됩니다.");
+}
+function requireActive(project: Pick<ProjectSummary, "deletedAt">): void {
+  if (project.deletedAt !== undefined) throw new LoopStorageError("conflict", "휴지통에 있는 프로젝트입니다. 내 프로젝트의 휴지통에서 복구한 뒤 다시 여세요.");
+}
+function projectHead(project: Pick<ProjectSummary, "deletedAt" | "revision" | "audioRevision">): string {
+  return project.deletedAt === undefined ? project.audioRevision : `trash:${project.revision}`;
 }
 
 async function readProject(id: string): Promise<{ head: unknown; audio: unknown; meta: unknown }> {
@@ -61,7 +70,7 @@ async function readProject(id: string): Promise<{ head: unknown; audio: unknown;
 }
 
 /** Metadata and PCM commit atomically; asynchronous hashes finish before opening a transaction. */
-async function commit(id: string, saved: SavedStationSession, expected: string | null, title?: string, source?: ProjectSummary): Promise<ProjectSummary> {
+async function commit(id: string, saved: SavedStationSession, expected: string | null, title?: string, source?: ProjectSummary, lifecycleRevision?: string): Promise<ProjectSummary> {
   const db = await openLoopDatabase();
   try {
     return await new Promise((resolve, reject) => {
@@ -77,9 +86,12 @@ async function commit(id: string, saved: SavedStationSession, expected: string |
         try {
           if ((head.result ?? null) !== expected) throw conflict();
           const previous = meta.result === undefined ? undefined : record(meta.result);
+          if (previous) requireActive(previous);
+          if (previous?.lifecycleRevision !== lifecycleRevision) throw conflict();
           if (expected === null && previous) throw conflict();
           if (source && sourceHead && sourceMeta) {
             const current = record(sourceMeta.result);
+            requireActive(current);
             if (current.id !== source.id || current.revision !== source.revision
               || current.audioRevision !== source.audioRevision || sourceHead.result !== source.audioRevision) throw conflict();
           }
@@ -98,22 +110,26 @@ async function commit(id: string, saved: SavedStationSession, expected: string |
 
 export class ProjectRepository implements SessionRepository<StationProject> {
   readonly scope: string;
+  private lifecycleRevision: string | undefined;
   constructor(readonly id: string) {
     if (!isProjectId(id)) throw new Error("프로젝트 ID가 올바르지 않습니다.");
     this.scope = id;
   }
   async load(): Promise<SavedStationSession | null> {
     const stored = await readProject(this.id);
+    const meta = stored.meta === undefined ? undefined : record(stored.meta);
+    if (meta) requireActive(meta);
     if (stored.head === undefined && stored.audio === undefined && stored.meta === undefined && this.id === LEGACY_PROJECT_ID) return null;
     const saved = await decodeStationSession(stored.audio);
     if (stored.head !== saved.revision) throw new LoopStorageError("corrupt", "프로젝트 저장 리비전이 일치하지 않습니다.");
-    if (stored.meta !== undefined && record(stored.meta).id !== this.id) throw new LoopStorageError("corrupt", "프로젝트 목록의 ID가 일치하지 않습니다.");
+    if (meta && meta.id !== this.id) throw new LoopStorageError("corrupt", "프로젝트 목록의 ID가 일치하지 않습니다.");
     if (stored.meta === undefined && this.id !== LEGACY_PROJECT_ID) throw new LoopStorageError("corrupt", "프로젝트 목록 정보가 없습니다.");
+    this.lifecycleRevision = meta?.lifecycleRevision;
     return saved;
   }
   async save(history: StationProject, expectedRevision: string | null): Promise<SavedStationSession> {
     const saved = await createStationSession(history);
-    await commit(this.id, saved, expectedRevision);
+    await commit(this.id, saved, expectedRevision, undefined, undefined, this.lifecycleRevision);
     return saved;
   }
 }
@@ -129,7 +145,10 @@ export class ProjectCatalog {
         const head = tx.objectStore("heads").get(LEGACY_PROJECT_ID);
         const meta = tx.objectStore("heads").get(PREFIX + LEGACY_PROJECT_ID);
         tx.oncomplete = () => {
-          try { resolve(head.result !== undefined && (meta.result === undefined || record(meta.result).audioRevision !== head.result)); }
+          try {
+            const previous = meta.result === undefined ? undefined : record(meta.result);
+            resolve(head.result !== undefined && previous?.deletedAt === undefined && (!previous || previous.audioRevision !== head.result));
+          }
           catch (error) { reject(error); }
         };
         tx.onabort = () => reject(tx.error);
@@ -150,6 +169,7 @@ export class ProjectCatalog {
           try {
             if (head.result !== saved.revision) throw conflict();
             const previous = meta.result === undefined ? undefined : record(meta.result);
+            if (previous) requireActive(previous);
             if (previous?.audioRevision !== saved.revision) heads.put(describe(LEGACY_PROJECT_ID, previous?.title ?? "기존 로컬 프로젝트", saved, previous), PREFIX + LEGACY_PROJECT_ID);
           } catch (error) { failure = error; tx.abort(); }
         };
@@ -158,7 +178,7 @@ export class ProjectCatalog {
       });
     } finally { target.close(); }
   }
-  async list(): Promise<ProjectSummary[]> {
+  async list(includeTrashed = false): Promise<ProjectSummary[]> {
     const db = await openLoopDatabase();
     try {
       const rows = await new Promise<unknown[]>((resolve, reject) => {
@@ -167,7 +187,8 @@ export class ProjectCatalog {
         tx.oncomplete = () => resolve(request.result as unknown[]);
         tx.onabort = () => reject(tx.error);
       });
-      return rows.map((row) => summary(record(row))).sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
+      return rows.map((row) => summary(record(row))).filter((row) => includeTrashed || row.deletedAt === undefined)
+        .sort((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id));
     } finally { db.close(); }
   }
   async create(title: string, transport: TransportConfig): Promise<{ project: ProjectSummary; saved: SavedStationSession }> {
@@ -182,6 +203,7 @@ export class ProjectCatalog {
     if (!isProjectId(source.id)) throw new Error("프로젝트 ID가 올바르지 않습니다.");
     const stored = await readProject(source.id);
     const current = record(stored.meta);
+    requireActive(current);
     if (current.id !== source.id || current.revision !== source.revision || current.audioRevision !== source.audioRevision
       || stored.head !== source.audioRevision) throw conflict();
     const original = await decodeStationSession(stored.audio);
@@ -199,19 +221,51 @@ export class ProjectCatalog {
       return await new Promise((resolve, reject) => {
         const tx = db.transaction("heads", "readwrite");
         const store = tx.objectStore("heads");
+        const head = store.get(project.id);
         const request = store.get(PREFIX + project.id);
         let result: ProjectRecord;
         let failure: unknown;
         request.onsuccess = () => {
           try {
             const previous = record(request.result);
-            if (previous.revision !== project.revision || previous.id !== project.id) throw conflict();
+            requireActive(previous);
+            if (previous.revision !== project.revision || previous.id !== project.id || head.result !== project.audioRevision || previous.audioRevision !== project.audioRevision) throw conflict();
             result = { ...previous, title, revision: crypto.randomUUID(), updatedAt: Date.now() };
             store.put(result, PREFIX + project.id);
           } catch (error) { failure = error; tx.abort(); }
         };
         tx.oncomplete = () => resolve(summary(result));
         tx.onabort = () => reject(failure ?? tx.error);
+      });
+    } finally { db.close(); }
+  }
+  /** Only metadata/head change. Never read, rewrite or delete the stored PCM. */
+  async setTrashed(project: ProjectSummary, trashed: boolean): Promise<ProjectSummary> {
+    if (!isProjectId(project.id)) throw new Error("프로젝트 ID가 올바르지 않습니다.");
+    const db = await openLoopDatabase();
+    try {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction("heads", "readwrite");
+        const store = tx.objectStore("heads");
+        const head = store.get(project.id);
+        const meta = store.get(PREFIX + project.id);
+        let result: ProjectRecord;
+        let failure: unknown;
+        meta.onsuccess = () => {
+          try {
+            const previous = record(meta.result);
+            if (previous.id !== project.id || previous.revision !== project.revision || previous.audioRevision !== project.audioRevision
+              || head.result !== projectHead(previous) || (previous.deletedAt !== undefined) === trashed) throw conflict();
+            const now = Date.now();
+            const revision = crypto.randomUUID();
+            result = { ...previous, revision, lifecycleRevision: revision, updatedAt: now, deletedAt: trashed ? now : undefined };
+            // A tombstone head also rejects saves from older tabs that only check audioRevision.
+            store.put(projectHead(result), project.id);
+            store.put(result, PREFIX + project.id);
+          } catch (error) { failure = error; tx.abort(); }
+        };
+        tx.oncomplete = () => resolve(summary(result));
+        tx.onabort = () => reject(failure ?? tx.error ?? new Error("휴지통 변경을 저장하지 못했습니다. 기존 프로젝트는 유지됩니다."));
       });
     } finally { db.close(); }
   }

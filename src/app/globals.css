@@ -471,3 +471,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .station-project-details { min-width: 0; }
 .station-project-details h2 { overflow-wrap: anywhere; }
 @media (max-width: 767px) { .station-session .station-project-name { max-width: 100%; } }
+.station-project-collections { margin-top: 24px; }
+.station-project-trash-list { display: grid; gap: 12px; margin-top: 16px; }
+.station-project-trash-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 20px; border: 1px solid var(--station-line); border-radius: 12px; background: var(--station-panel);
+}
+.station-project-trash-row > div { min-width: 0; overflow-wrap: anywhere; }
+.station-project-trash-row .rt-Button { min-height: 44px; flex-shrink: 0; }
+.station-project-card .rt-Button { min-height: 44px; }
+@media (max-width: 540px) { .station-project-trash-row { align-items: stretch; flex-direction: column; } }

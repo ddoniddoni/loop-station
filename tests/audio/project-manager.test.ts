@@ -183,6 +183,107 @@ describe("project names", () => {
   });
 });
 
+describe("project trash transitions", () => {
+  async function setup() {
+    const f = await fixture();
+    const metadata = new Map(f.manager.getSnapshot().projects.map((project) => [project.id, project]));
+    vi.spyOn(f.catalog, "list").mockImplementation(async () => [...metadata.values()]);
+    const write = vi.spyOn(f.catalog, "setTrashed").mockImplementation(async (project, trashed) => {
+      const updated = { ...project, revision: crypto.randomUUID(), deletedAt: trashed ? Date.now() : undefined };
+      metadata.set(project.id, updated); return updated;
+    });
+    return { ...f, metadata, write, source: metadata.get(LEGACY_PROJECT_ID)! };
+  }
+  it("moves the active project only after audio closes, then adopts an independent empty workspace", async () => {
+    const f = await setup(); const stop = vi.fn(async () => true);
+    expect(await f.manager.trash(f.source, stop)).toBe(true);
+    expect(stop).toHaveBeenCalledOnce(); expect(f.write).toHaveBeenCalledExactlyOnceWith(f.source, true);
+    expect(f.manager.getSnapshot().activeId).not.toBe(LEGACY_PROJECT_ID);
+    expect(f.manager.getSnapshot().projects.map((project) => project.id)).toEqual([otherId]);
+    expect(f.manager.getSnapshot().trashed[0].id).toBe(LEGACY_PROJECT_ID);
+    expect(f.station.getSnapshot().save.phase).toBe("empty");
+    expect(f.projects.get(LEGACY_PROJECT_ID)).toBe(f.original); expect(f.station.projectChanging).toBe(false);
+  });
+  it("does not close the active audio when another saved project is moved or restored", async () => {
+    const f = await setup(); const stop = vi.fn(async () => true);
+    expect(await f.manager.trash(f.metadata.get(otherId)!, stop)).toBe(true);
+    expect(stop).not.toHaveBeenCalled(); expect(f.manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(await f.manager.restore(f.manager.getSnapshot().trashed[0])).toBe(true);
+    expect(f.manager.getSnapshot().trashed).toHaveLength(0);
+    expect(f.manager.getSnapshot().projects).toHaveLength(2);
+    expect(f.station.getSnapshot().save.savedAt).toBe(f.original.updatedAt);
+  });
+  it("preserves the active project if audio shutdown or the atomic trash write fails", async () => {
+    const f = await setup();
+    expect(await f.manager.trash(f.source, async () => false)).toBe(false); expect(f.write).not.toHaveBeenCalled();
+    f.write.mockRejectedValueOnce(new DOMException("full", "QuotaExceededError"));
+    expect(await f.manager.trash(f.source, async () => true)).toBe(false);
+    expect(f.manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(f.manager.getSnapshot().trashed).toHaveLength(0);
+    expect(f.station.getSnapshot().save.savedAt).toBe(f.original.updatedAt);
+    expect(f.station.projectChanging).toBe(false);
+  });
+  it("blocks capture and duplicate requests throughout the pending metadata transaction", async () => {
+    const f = await setup(); let finish!: (project: ProjectSummary) => void;
+    f.write.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const pending = f.manager.trash(f.source, async () => true); await Promise.resolve();
+    expect(f.station.getSnapshot().save.editLocked).toBe(true);
+    expect(await f.manager.trash(f.source, async () => true)).toBe(false);
+    expect(await f.manager.restore(f.source)).toBe(false);
+    finish({ ...f.source, deletedAt: Date.now() }); await pending;
+    expect(f.station.projectChanging).toBe(false);
+  });
+  it("rejects trash while current changes are unsaved without closing audio", async () => {
+    const f = await setup();
+    vi.spyOn(ProjectRepository.prototype, "save").mockRejectedValue(new DOMException("full", "QuotaExceededError"));
+    f.station.configureProject(config); await f.station.retryStorage();
+    const stop = vi.fn(async () => true);
+    expect(await f.manager.trash(f.source, stop)).toBe(false);
+    expect(stop).not.toHaveBeenCalled(); expect(f.write).not.toHaveBeenCalled(); expect(f.station.dirty).toBe(true);
+  });
+  it("keeps a failed restore in the trash for retry without replacing the current project", async () => {
+    const f = await setup(); await f.manager.trash(f.metadata.get(otherId)!, async () => true);
+    const trashed = f.manager.getSnapshot().trashed[0];
+    f.write.mockRejectedValueOnce(new Error("write failed"));
+    expect(await f.manager.restore(trashed)).toBe(false);
+    expect(f.manager.getSnapshot().trashed[0]).toEqual(trashed);
+    expect(f.manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(await f.manager.restore(trashed)).toBe(true);
+  });
+  it("preserves the local working state and blocks writes when another tab trashes its project", async () => {
+    const f = await setup(); f.metadata.set(LEGACY_PROJECT_ID, { ...f.source, deletedAt: Date.now() });
+    await f.manager.refresh();
+    expect(f.manager.getSnapshot().activeId).toBe(LEGACY_PROJECT_ID);
+    expect(f.station.getSnapshot().save).toMatchObject({ phase: "conflict", editLocked: true });
+    expect(f.station.getSnapshot().config?.bpm).toBe(120);
+    expect(f.projects.get(LEGACY_PROJECT_ID)).toBe(f.original);
+  });
+  it("starts empty after all projects are trashed without loading or resurrecting the legacy ID", async () => {
+    const f = await setup();
+    for (const [id, project] of f.metadata) f.metadata.set(id, { ...project, deletedAt: Date.now() });
+    const load = vi.spyOn(ProjectRepository.prototype, "load"); load.mockClear();
+    const station = new StationController(new MicrophoneController(), new ProjectRepository(LEGACY_PROJECT_ID));
+    const manager = new ProjectManager(station, f.catalog); await manager.initialize();
+    expect(load).not.toHaveBeenCalled(); expect(manager.getSnapshot().projects).toHaveLength(0);
+    expect(manager.getSnapshot().trashed).toHaveLength(2); expect(manager.getSnapshot().activeId).not.toBe(LEGACY_PROJECT_ID);
+    expect(station.getSnapshot().save.phase).toBe("empty");
+  });
+  it("locks the old working state if the trash commit succeeds but blank-project adoption fails", async () => {
+    const f = await setup(); vi.spyOn(f.station, "adoptProject").mockImplementation(() => { throw new Error("adoption failed"); });
+    expect(await f.manager.trash(f.source, async () => true)).toBe(false);
+    expect(f.manager.getSnapshot().trashed).toHaveLength(1);
+    expect(f.station.getSnapshot().save).toMatchObject({ phase: "conflict", editLocked: true });
+    expect(f.projects.get(LEGACY_PROJECT_ID)).toBe(f.original);
+  });
+  it("adopts the repository that loaded the project so its restore generation is retained", async () => {
+    const f = await setup(); const loaded: ProjectRepository[] = [];
+    vi.spyOn(ProjectRepository.prototype, "load").mockImplementation(async function (this: ProjectRepository) { loaded.push(this); return f.other; });
+    const adopt = vi.spyOn(f.station, "adoptProject");
+    expect(await f.manager.open(otherId, async () => true)).toBe(true);
+    expect(adopt).toHaveBeenCalledWith(loaded[0], f.other);
+  });
+});
+
 describe("project-scoped conflict notifications", () => {
   it("uses independent channels for separate projects and retains the legacy channel", () => {
     const names: string[] = [];
